@@ -22,7 +22,7 @@ export default function LayersPanel() {
   } = useDrawing();
 
   return (
-    <section className="flex flex-col h-1/3 min-h-55 max-h-75 p-4 bg-background">
+    <section className="flex flex-col h-1/3 min-h-[160px] max-h-[300px] p-4 bg-background">
       {/* Header */}
       <div className="flex items-center justify-between pb-3">
         <div className="flex items-center gap-2">

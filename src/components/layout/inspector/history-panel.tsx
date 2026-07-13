@@ -28,7 +28,7 @@ export default function HistoryPanel() {
   }
 
   return (
-    <section className="flex flex-col h-1/3 min-h-55 max-h-75 p-4 bg-background">
+    <section className="flex flex-col h-1/3 min-h-[160px] max-h-[300px] p-4 bg-background">
       {/* Title */}
       <div className="flex items-center gap-2 pb-3 border-b mb-3">
         <History className="h-4 w-4 text-muted-foreground" />

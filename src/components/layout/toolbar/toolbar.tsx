@@ -35,14 +35,7 @@ export default function Toolbar() {
         <div className="flex items-center gap-3">
           <SidebarTrigger className="h-9 w-9 border hover:bg-accent hover:text-accent-foreground transition-all duration-200" />
           <div className="h-4 w-px bg-border hidden sm:block" />
-          <div className="flex items-center gap-2">
-            <span className="font-sans font-bold tracking-tight text-foreground flex items-center gap-1.5">
-              <span className="p-1 rounded-md bg-primary text-primary-foreground">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              FuKōbō <span className="text-muted-foreground font-medium text-sm hidden md:inline">Studio</span>
-            </span>
-          </div>
+         
         </div>
 
         {/* Center Section: Core Actions (Undo, Redo, Export) */}

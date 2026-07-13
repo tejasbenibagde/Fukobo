@@ -29,6 +29,7 @@ import {
   Palette,
   Sliders,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 
 export default function ToolPanel() {
@@ -85,17 +86,13 @@ export default function ToolPanel() {
       {/* Header with Collapse Trigger */}
       <SidebarHeader className="flex flex-row items-center justify-between px-3 py-2 border-b h-14">
         {isExpanded && (
-          <span className="font-sans font-semibold text-xs tracking-wider uppercase text-muted-foreground">
-            Paint Studio
-          </span>
+         <span className="font-sans font-bold tracking-tight text-foreground flex items-center gap-1.5">
+              <span className="p-1 rounded-md bg-primary text-primary-foreground">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              FuKōbō <span className="text-muted-foreground font-medium text-sm hidden md:inline">Studio</span>
+            </span>
         )}
-        <SidebarTrigger className="h-8 w-8 ml-auto border hover:bg-accent hover:text-accent-foreground">
-          {isExpanded ? (
-            <ChevronLeft className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </SidebarTrigger>
       </SidebarHeader>
 
       <SidebarContent className="py-2 gap-4">

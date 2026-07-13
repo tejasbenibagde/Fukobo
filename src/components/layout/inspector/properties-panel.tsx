@@ -197,7 +197,7 @@ export default function PropertiesPanel() {
   };
 
   return (
-    <section className="flex-1 p-4 bg-background flex flex-col min-h-65">
+    <section className="flex-1 p-4 bg-background flex flex-col min-h-[180px]">
       {/* Title */}
       <div className="flex items-center gap-2 pb-3 border-b mb-3">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />

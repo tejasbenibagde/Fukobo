@@ -5,25 +5,26 @@ import HistoryPanel from "./history-panel";
 import PropertiesPanel from "./properties-panel";
 
 export default function Inspector() {
-    const { rightPanelOpen } = useDrawing();
+  const { rightPanelOpen } = useDrawing();
 
-    return (
-        <aside
-            className={`h-full bg-background flex flex-col transition-all duration-300 shadow-sm shrink-0 border-l ${rightPanelOpen
-                    ? "w-80 opacity-100"
-                    : "w-0 opacity-0 pointer-events-none border-l-0 overflow-hidden"
-                }`}
-        >
-            <div className="flex flex-col h-full divide-y divide-border min-w-[320px]">
-                {/* Layer Manager Panel */}
-                <LayersPanel />
+  return (
+    <aside
+      className={`h-full bg-background flex flex-col transition-all duration-300 shadow-sm shrink-0 border-l overflow-hidden ${
+        rightPanelOpen 
+          ? "w-80 opacity-100" 
+          : "w-0 opacity-0 pointer-events-none border-l-0"
+      }`}
+    >
+      <div className="flex flex-col h-full divide-y divide-border min-w-[320px] overflow-y-auto overflow-x-hidden">
+        {/* Layer Manager Panel */}
+        <LayersPanel />
 
-                {/* Properties Panel */}
-                <PropertiesPanel />
+        {/* Properties Panel */}
+        <PropertiesPanel />
 
-                {/* History Panel */}
-                <HistoryPanel />
-            </div>
-        </aside>
-    );
+        {/* History Panel */}
+        <HistoryPanel />
+      </div>
+    </aside>
+  );
 }

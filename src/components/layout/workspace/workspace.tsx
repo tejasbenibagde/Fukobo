@@ -9,16 +9,15 @@ import { SidebarInset } from "@/components/ui/sidebar";
 
 export default function Workspace() {
     return (
-        <div className="flex max-h-screen w-full bg-secondary" >
+        <div className="flex h-screen w-screen overflow-hidden bg-secondary select-none" >
             <ToolPanel />
-            <SidebarInset className="flex flex-col">
+            <SidebarInset className="flex flex-col h-full overflow-hidden">
                 <Toolbar />
-                <main className="flex h-full items-center justify-between">
+                <main className="flex flex-1 min-h-0 items-stretch justify-between overflow-hidden">
                     <CanvasViewport />
                     <Inspector />
                 </main>
                 <StatusBar />
-
             </SidebarInset>
         </div>
     );
