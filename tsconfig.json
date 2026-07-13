@@ -30,7 +30,6 @@
   },
   "include": [
     "src",
-    "electron"
   ],
   "references": [
     {
