@@ -13,16 +13,26 @@ import {
   Bold,
   Italic
 } from "lucide-react";
-import { useState } from "react";
 
 export default function PropertiesPanel() {
-  const { activeTool, brushSize, primaryColor, brushOpacity } = useDrawing();
-  const [fontFamily, setFontFamily] = useState("Montserrat");
-  const [isBold, setIsBold] = useState(false);
-  const [isItalic, setIsItalic] = useState(false);
-  const [textAlign, setTextAlign] = useState("center");
-  const [strokeType, setStrokeType] = useState("solid");
-  const [fillShape, setFillShape] = useState(false);
+  const { 
+    activeTool, 
+    brushSize, 
+    primaryColor, 
+    brushOpacity,
+    fontFamily,
+    setFontFamily,
+    isBold,
+    setIsBold,
+    isItalic,
+    setIsItalic,
+    textAlign,
+    setTextAlign,
+    strokeType,
+    setStrokeType,
+    fillShape,
+    setFillShape,
+  } = useDrawing();
 
   // Helper to render tool specific properties
   const renderToolProperties = () => {

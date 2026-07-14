@@ -18,8 +18,23 @@ export default function LayersPanel() {
     addLayer,
     deleteLayer,
     toggleLayerVisibility,
-    setLayerOpacity
+    setLayerOpacity,
+    setLayerBlendMode,
   } = useDrawing();
+
+  const BLEND_MODES = [
+    { id: "source-over", name: "Normal" },
+    { id: "multiply", name: "Multiply" },
+    { id: "screen", name: "Screen" },
+    { id: "overlay", name: "Overlay" },
+    { id: "darken", name: "Darken" },
+    { id: "lighten", name: "Lighten" },
+    { id: "color-dodge", name: "Color Dodge" },
+    { id: "color-burn", name: "Color Burn" },
+    { id: "hard-light", name: "Hard Light" },
+    { id: "soft-light", name: "Soft Light" },
+    { id: "difference", name: "Difference" },
+  ];
 
   return (
     <section className="flex flex-col h-1/3 min-h-[160px] max-h-[300px] p-4 bg-background">
@@ -100,24 +115,39 @@ export default function LayersPanel() {
         })}
       </div>
 
-      {/* Active Layer Opacity Adjuster */}
-      <div className="pt-3 border-t mt-3 space-y-1">
+      {/* Active Layer Opacity & Blend Mode Adjuster */}
+      <div className="pt-3 border-t mt-3 space-y-2.5">
         {layers.map((layer) => {
           if (layer.id !== activeLayerId) return null;
           return (
-            <div key={layer.id} className="space-y-1.5">
-              <div className="flex justify-between text-[11px] font-semibold text-muted-foreground">
-                <span>Active Layer Opacity</span>
-                <span>{Math.round(layer.opacity * 100)}%</span>
+            <div key={layer.id} className="space-y-2">
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] font-semibold text-muted-foreground">
+                  <span>Active Layer Opacity</span>
+                  <span>{Math.round(layer.opacity * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={layer.opacity * 100}
+                  onChange={(e) => setLayerOpacity(layer.id, parseFloat(e.target.value) / 100)}
+                  className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                />
               </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={layer.opacity * 100}
-                onChange={(e) => setLayerOpacity(layer.id, parseFloat(e.target.value) / 100)}
-                className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
-              />
+
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-muted-foreground">Blend Mode</span>
+                <select
+                  value={layer.blendMode || "source-over"}
+                  onChange={(e) => setLayerBlendMode(layer.id, e.target.value)}
+                  className="w-full bg-background border rounded px-2 py-1 text-xs focus:outline-none"
+                >
+                  {BLEND_MODES.map((mode) => (
+                    <option key={mode.id} value={mode.id}>{mode.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           );
         })}

@@ -34,8 +34,15 @@ export default function Toolbar() {
         {/* Left Section: Sidebar toggle & Title */}
         <div className="flex items-center gap-3">
           <SidebarTrigger className="h-9 w-9 border hover:bg-accent hover:text-accent-foreground transition-all duration-200" />
-          <div className="h-4 w-px bg-border hidden sm:block" />
-         
+          <div className="h-4 w-[1px] bg-border hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <span className="font-sans font-bold tracking-tight text-foreground flex items-center gap-1.5">
+              <span className="p-1 rounded-md bg-primary text-primary-foreground">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              FuKōbō <span className="text-muted-foreground font-medium text-sm hidden md:inline">Studio</span>
+            </span>
+          </div>
         </div>
 
         {/* Center Section: Core Actions (Undo, Redo, Export) */}
@@ -74,7 +81,7 @@ export default function Toolbar() {
             </TooltipContent>
           </Tooltip>
 
-          <div className="h-4 w-px bg-border mx-1" />
+          <div className="h-4 w-[1px] bg-border mx-1" />
 
           <Tooltip>
             <TooltipTrigger render={
@@ -83,16 +90,23 @@ export default function Toolbar() {
                 size="icon"
                 className="h-8 w-8 text-foreground hover:bg-primary/15 hover:text-primary"
                 onClick={() => {
-                  // Standard Export Alert placeholder since we're just setting up clean template UI
-                  const statusEl = document.querySelector('footer');
-                  if (statusEl) {
-                    statusEl.innerText = "Exporting artwork as PNG...";
-                    setTimeout(() => {
+                  const canvas = document.querySelector('canvas');
+                  if (canvas) {
+                    const url = canvas.toDataURL("image/png");
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = "artwork.png";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    const statusEl = document.querySelector('footer');
+                    if (statusEl) {
                       statusEl.innerText = "Artwork successfully exported!";
                       setTimeout(() => {
                         statusEl.innerText = "Ready";
                       }, 2000);
-                    }, 1000);
+                    }
                   }
                 }}
               />
@@ -112,7 +126,7 @@ export default function Toolbar() {
             <span>Tool: <strong className="text-foreground">{getToolDisplayName(activeTool)}</strong></span>
           </div>
 
-          <div className="h-4 w-px bg-border hidden sm:block" />
+          <div className="h-4 w-[1px] bg-border hidden sm:block" />
 
           <Tooltip>
             <TooltipTrigger render={

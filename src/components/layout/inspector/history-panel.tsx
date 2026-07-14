@@ -1,31 +1,39 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/layout/inspector/history-panel.tsx
 
 import { useDrawing } from "@/context/drawing-context";
 import { History, Undo, Redo, CheckCircle2 } from "lucide-react";
 
 export default function HistoryPanel() {
-  const { canUndo, canRedo, undo, redo } = useDrawing();
+  const { fuderuCanvasRef, undo, redo, canUndo, canRedo, syncLayers } = useDrawing();
 
-  // We can represent a real list of actions in the canvas history
-  const historySteps = [
-    { id: 0, label: "Base Canvas Created", type: "system" },
-    { id: 1, label: "Brush Stroke 1", type: "draw" },
-    { id: 2, label: "Brush Stroke 2", type: "draw" },
-    { id: 3, label: "Eraser Stroke", type: "erase" },
-    { id: 4, label: "Added Layer 1", type: "layer" },
-    { id: 5, label: "Rectangle Outline", type: "shape" },
-  ];
+  // Retrieve actual states dynamically from fuderu stack
+  const brush = fuderuCanvasRef.current?.brush as any;
+  const stackLength = brush?.canvasStack?.length || 1;
+  const activeIndex = brush?.canvasStackIndex ?? 0;
 
-  // Based on context state, let's deduce current step index
-  // canUndo = true, canRedo = true: index could be middle
-  // canUndo = false: index is 0
-  // canRedo = false: index is maximum
-  let activeIndex = 3;
-  if (!canUndo) {
-    activeIndex = 0;
-  } else if (!canRedo) {
-    activeIndex = 5;
+  const historySteps = [];
+  for (let i = 0; i < stackLength; i++) {
+    historySteps.push({
+      id: i,
+      label: i === 0 ? "Initial Base Canvas" : `Stroke Action ${i}`,
+    });
   }
+
+  const handleStepClick = (targetId: number) => {
+    if (!fuderuCanvasRef.current || !brush) return;
+    const diff = brush.canvasStackIndex - targetId;
+    if (diff > 0) {
+      for (let i = 0; i < diff; i++) {
+        fuderuCanvasRef.current.undo();
+      }
+    } else if (diff < 0) {
+      for (let i = 0; i < -diff; i++) {
+        fuderuCanvasRef.current.redo();
+      }
+    }
+    syncLayers();
+  };
 
   return (
     <section className="flex flex-col h-1/3 min-h-[160px] max-h-[300px] p-4 bg-background">
@@ -46,16 +54,7 @@ export default function HistoryPanel() {
           return (
             <div
               key={step.id}
-              onClick={() => {
-                // Determine how many times to call undo/redo to reach this step
-                if (step.id < activeIndex) {
-                  const diff = activeIndex - step.id;
-                  for (let i = 0; i < diff; i++) undo();
-                } else if (step.id > activeIndex) {
-                  const diff = step.id - activeIndex;
-                  for (let i = 0; i < diff; i++) redo();
-                }
-              }}
+              onClick={() => handleStepClick(step.id)}
               className={`flex items-center gap-2.5 p-1.5 rounded-md cursor-pointer transition-all duration-150 ${
                 isActive
                   ? "bg-primary/10 text-primary font-semibold border-l-2 border-primary pl-2"
