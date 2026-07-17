@@ -4,7 +4,12 @@
 import { useDrawing } from "@/context/drawing-context";
 import { History, Undo, Redo, CheckCircle2 } from "lucide-react";
 
-export default function HistoryPanel() {
+interface PanelProps {
+  style?: React.CSSProperties;
+  className?: string;
+}
+
+export default function HistoryPanel({ style, className }: PanelProps = {}) {
   const { fuderuCanvasRef, undo, redo, canUndo, canRedo, syncLayers } = useDrawing();
 
   const canvas = fuderuCanvasRef.current;
@@ -62,7 +67,10 @@ export default function HistoryPanel() {
   };
 
   return (
-    <section className="flex flex-col h-1/3 min-h-[160px] max-h-[300px] p-4 bg-background">
+    <section 
+      style={style}
+      className={`flex flex-col p-4 bg-background ${className || "h-full min-h-0"}`}
+    >
       {/* Title */}
       <div className="flex items-center gap-2 pb-3 border-b mb-3">
         <History className="h-4 w-4 text-muted-foreground" />

@@ -129,6 +129,12 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     syncLayers();
   };
 
+  const renameLayer = (id: string, name: string) => {
+    if (!fuderuCanvasRef.current) return;
+    fuderuCanvasRef.current.updateLayer(id, { name });
+    syncLayers();
+  };
+
   const handleSetActiveLayerId = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.setActiveLayer(id);
@@ -136,7 +142,20 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   };
 
   const reorderLayers = (newLayers: Layer[]) => {
-    setLayers(newLayers);
+    if (!fuderuCanvasRef.current) return;
+    const canvas = fuderuCanvasRef.current;
+    
+    // In bottom-to-top order
+    const targetIds = [...newLayers].reverse().map(l => l.id);
+    
+    // Move layers in the canvas to match targetIds order
+    for (let i = 0; i < targetIds.length; i++) {
+      const id = targetIds[i];
+      canvas.layers.moveLayer(id, i);
+    }
+    
+    canvas.renderLayers();
+    syncLayers();
   };
 
   const undo = () => {
@@ -187,6 +206,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         toggleLayerVisibility,
         setLayerOpacity,
         setLayerBlendMode,
+        renameLayer,
         reorderLayers,
         clearCanvas,
         undo,

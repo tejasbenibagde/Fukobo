@@ -38,6 +38,7 @@ export interface DrawingContextType {
   toggleLayerVisibility: (id: string) => void;
   setLayerOpacity: (id: string, opacity: number) => void;
   setLayerBlendMode: (id: string, blendMode: string) => void;
+  renameLayer: (id: string, name: string) => void;
   reorderLayers: (layers: Layer[]) => void;
   clearCanvas: () => void;
   

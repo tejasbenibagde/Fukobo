@@ -14,7 +14,12 @@ import {
   Italic
 } from "lucide-react";
 
-export default function PropertiesPanel() {
+interface PanelProps {
+  style?: React.CSSProperties;
+  className?: string;
+}
+
+export default function PropertiesPanel({ style, className }: PanelProps = {}) {
   const { 
     activeTool, 
     brushSize, 
@@ -207,7 +212,10 @@ export default function PropertiesPanel() {
   };
 
   return (
-    <section className="flex-1 p-4 bg-background flex flex-col min-h-[180px]">
+    <section 
+      style={style}
+      className={`p-4 bg-background flex flex-col ${className || "flex-1 min-h-0"}`}
+    >
       {/* Title */}
       <div className="flex items-center gap-2 pb-3 border-b mb-3">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
