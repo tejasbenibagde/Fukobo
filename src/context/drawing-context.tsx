@@ -24,6 +24,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const [textAlign, setTextAlign] = useState<string>("center");
   const [strokeType, setStrokeType] = useState<string>("solid");
   const [fillShape, setFillShape] = useState<boolean>(false);
+  const [pressureSensitivityEnabled, setPressureSensitivityEnabled] = useState<boolean>(false);
 
   // fuderu canvas reference
   const fuderuCanvasRef = useRef<Canvas | null>(null);
@@ -57,10 +58,9 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     setLayers([...mapped].reverse());
     setActiveLayerId(canvas.layers.getActiveId() || "");
     
-    const brush = canvas.brush as any;
-    if (brush) {
-      setCanUndo(brush.canvasStackIndex > 0);
-      setCanRedo(brush.canvasStackIndex < brush.canvasStack.length - 1);
+    if (canvas.history) {
+      setCanUndo(canvas.history.canUndo());
+      setCanRedo(canvas.history.canRedo());
     }
   };
 
@@ -69,6 +69,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
     
+    canvas.pressureSimulation = pressureSensitivityEnabled;
+
     canvas.loadConfig({
       size: brushSize,
       opacity: brushOpacity,
@@ -85,7 +87,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
       canvas.setSmooth(true);
       canvas.loadConfig({ spacing: 0.12 });
     }
-  }, [brushSize, brushOpacity, primaryColor, activeTool]);
+  }, [brushSize, brushOpacity, primaryColor, activeTool, pressureSensitivityEnabled]);
 
   const addLayer = () => {
     if (!fuderuCanvasRef.current) return;
@@ -207,6 +209,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         setStrokeType,
         fillShape,
         setFillShape,
+        pressureSensitivityEnabled,
+        setPressureSensitivityEnabled,
       }}
     >
       {children}

@@ -10,7 +10,32 @@ import {
   Sparkles, 
   Trash2,
 } from "lucide-react";
-import { Canvas } from "fuderu";
+import { Canvas, type HistoryEntry } from "fuderu";
+
+class CustomCanvasStateHistoryEntry implements HistoryEntry {
+  constructor(
+    public layerId: string,
+    public beforeData: ImageData,
+    public afterData: ImageData,
+    private canvas: any
+  ) {}
+
+  undo() {
+    const layer = this.canvas.getLayer(this.layerId);
+    if (layer) {
+      layer.ctx.putImageData(this.beforeData, 0, 0);
+      this.canvas.renderLayers();
+    }
+  }
+
+  redo() {
+    const layer = this.canvas.getLayer(this.layerId);
+    if (layer) {
+      layer.ctx.putImageData(this.afterData, 0, 0);
+      this.canvas.renderLayers();
+    }
+  }
+}
 
 export default function CanvasViewport() {
   const {
@@ -28,6 +53,7 @@ export default function CanvasViewport() {
     textAlign,
     strokeType,
     fillShape,
+    pressureSensitivityEnabled,
   } = useDrawing();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -47,7 +73,7 @@ export default function CanvasViewport() {
     const fuderuCanvas = new Canvas({
       canvas,
       document: { width: 800, height: 600 },
-      pressureSimulation: true,
+      pressureSimulation: pressureSensitivityEnabled,
       brush: {
         size: brushSize,
         opacity: brushOpacity,
@@ -61,14 +87,6 @@ export default function CanvasViewport() {
     if (bg) {
       bg.ctx.fillStyle = "#ffffff";
       bg.ctx.fillRect(0, 0, bg.canvas.width, bg.canvas.height);
-      
-      // Initialize brush stack with the clean background state so undo works back to base paper
-      const brushInstance = fuderuCanvas.brush as any;
-      if (brushInstance && brushInstance.canvasStack) {
-        brushInstance.canvasStack = [bg.ctx.getImageData(0, 0, bg.canvas.width, bg.canvas.height)];
-        brushInstance.canvasStackIndex = 0;
-      }
-      
       (fuderuCanvas as any).renderLayers();
     }
 
@@ -172,20 +190,17 @@ export default function CanvasViewport() {
     if (!activeLayer) return;
 
     const ctx = activeLayer.ctx;
+    const beforeData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+
     ctx.save();
     ctx.fillStyle = primaryColor;
     ctx.globalAlpha = brushOpacity;
     ctx.fillRect(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
     ctx.restore();
 
-    // Push into brush stack
-    const brushInstance = canvas.brush as any;
-    if (brushInstance && brushInstance.maxUndoRedoStackSize > 0) {
-      if (brushInstance.canvasStackIndex !== brushInstance.canvasStack.length - 1) {
-        brushInstance.canvasStack.splice(brushInstance.canvasStackIndex + 1, brushInstance.canvasStack.length - brushInstance.canvasStackIndex - 1);
-      }
-      brushInstance.canvasStackIndex = brushInstance.canvasStack.push(ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height)) - 1;
-    }
+    const afterData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+    const entry = new CustomCanvasStateHistoryEntry(activeLayer.id, beforeData, afterData, canvas);
+    canvas.history.push(entry);
 
     (canvas as any).renderLayers();
     syncLayers();
@@ -198,6 +213,8 @@ export default function CanvasViewport() {
     if (!activeLayer) return;
 
     const ctx = activeLayer.ctx;
+    const beforeData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+
     ctx.save();
 
     ctx.lineWidth = brushSize;
@@ -247,14 +264,9 @@ export default function CanvasViewport() {
 
     ctx.restore();
 
-    // Push into brush stack
-    const brushInstance = canvas.brush as any;
-    if (brushInstance && brushInstance.maxUndoRedoStackSize > 0) {
-      if (brushInstance.canvasStackIndex !== brushInstance.canvasStack.length - 1) {
-        brushInstance.canvasStack.splice(brushInstance.canvasStackIndex + 1, brushInstance.canvasStack.length - brushInstance.canvasStackIndex - 1);
-      }
-      brushInstance.canvasStackIndex = brushInstance.canvasStack.push(ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height)) - 1;
-    }
+    const afterData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+    const entry = new CustomCanvasStateHistoryEntry(activeLayer.id, beforeData, afterData, canvas);
+    canvas.history.push(entry);
 
     (canvas as any).renderLayers();
 
@@ -270,6 +282,8 @@ export default function CanvasViewport() {
     if (!activeLayer) return;
 
     const ctx = activeLayer.ctx;
+    const beforeData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+
     ctx.save();
 
     ctx.fillStyle = primaryColor;
@@ -285,14 +299,9 @@ export default function CanvasViewport() {
     ctx.fillText(text, x, y);
     ctx.restore();
 
-    // Push into brush stack
-    const brushInstance = canvas.brush as any;
-    if (brushInstance && brushInstance.maxUndoRedoStackSize > 0) {
-      if (brushInstance.canvasStackIndex !== brushInstance.canvasStack.length - 1) {
-        brushInstance.canvasStack.splice(brushInstance.canvasStackIndex + 1, brushInstance.canvasStack.length - brushInstance.canvasStackIndex - 1);
-      }
-      brushInstance.canvasStackIndex = brushInstance.canvasStack.push(ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height)) - 1;
-    }
+    const afterData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+    const entry = new CustomCanvasStateHistoryEntry(activeLayer.id, beforeData, afterData, canvas);
+    canvas.history.push(entry);
 
     (canvas as any).renderLayers();
     syncLayers();

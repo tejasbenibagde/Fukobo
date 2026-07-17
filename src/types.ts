@@ -66,5 +66,7 @@ export interface DrawingContextType {
   setStrokeType: (stroke: string) => void;
   fillShape: boolean;
   setFillShape: (fill: boolean) => void;
+  pressureSensitivityEnabled: boolean;
+  setPressureSensitivityEnabled: (enabled: boolean) => void;
 }
 

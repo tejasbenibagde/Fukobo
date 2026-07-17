@@ -7,29 +7,55 @@ import { History, Undo, Redo, CheckCircle2 } from "lucide-react";
 export default function HistoryPanel() {
   const { fuderuCanvasRef, undo, redo, canUndo, canRedo, syncLayers } = useDrawing();
 
-  // Retrieve actual states dynamically from fuderu stack
-  const brush = fuderuCanvasRef.current?.brush as any;
-  const stackLength = brush?.canvasStack?.length || 1;
-  const activeIndex = brush?.canvasStackIndex ?? 0;
+  const canvas = fuderuCanvasRef.current;
+  const undoStack = (canvas?.history as any)?.undoStack || [];
+  const redoStack = (canvas?.history as any)?.redoStack || [];
 
-  const historySteps = [];
-  for (let i = 0; i < stackLength; i++) {
-    historySteps.push({
-      id: i,
-      label: i === 0 ? "Initial Base Canvas" : `Stroke Action ${i}`,
-    });
-  }
+  // Reconstruct chronological action list
+  const actions = [...undoStack, ...[...redoStack].reverse()];
+  const activeIndex = undoStack.length; // Active index is equal to the length of applied actions
+
+  const getEntryLabel = (entry: any) => {
+    if (!entry) return "Action";
+    const name = entry.constructor?.name;
+    if (name === "CanvasStateHistoryEntry" || entry.hasOwnProperty("beforeData")) {
+      return "Draw Stroke";
+    }
+    if (name === "LayerCreatedHistoryEntry" || (entry.hasOwnProperty("layer") && !entry.hasOwnProperty("index"))) {
+      return "Create Layer";
+    }
+    if (name === "LayerDeletedHistoryEntry" || (entry.hasOwnProperty("layer") && entry.hasOwnProperty("index"))) {
+      return "Delete Layer";
+    }
+    if (name === "LayerPropertyHistoryEntry" || entry.hasOwnProperty("propertyName")) {
+      const prop = entry.propertyName || "Property";
+      return `Change ${prop.charAt(0).toUpperCase() + prop.slice(1)}`;
+    }
+    if (name === "MoveLayerHistoryEntry" || entry.hasOwnProperty("beforeIndex")) {
+      return "Reorder Layer";
+    }
+    return "Edit Canvas";
+  };
+
+  const historySteps = [
+    { id: 0, label: "Initial Base Canvas" },
+    ...actions.map((act, idx) => ({
+      id: idx + 1,
+      label: `${idx + 1}. ${getEntryLabel(act)}`,
+    })),
+  ];
 
   const handleStepClick = (targetId: number) => {
-    if (!fuderuCanvasRef.current || !brush) return;
-    const diff = brush.canvasStackIndex - targetId;
+    if (!canvas) return;
+    const currentIndex = undoStack.length;
+    const diff = currentIndex - targetId;
     if (diff > 0) {
       for (let i = 0; i < diff; i++) {
-        fuderuCanvasRef.current.undo();
+        canvas.undo();
       }
     } else if (diff < 0) {
       for (let i = 0; i < -diff; i++) {
-        fuderuCanvasRef.current.redo();
+        canvas.redo();
       }
     }
     syncLayers();

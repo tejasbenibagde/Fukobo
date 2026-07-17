@@ -4,7 +4,6 @@ import {
   Sidebar,
   SidebarHeader,
   SidebarContent,
-  SidebarTrigger,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
@@ -24,12 +23,9 @@ import {
   Square,
   Circle,
   Type,
-  ChevronLeft,
-  ChevronRight,
   Palette,
   Sliders,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 
 export default function ToolPanel() {
@@ -44,6 +40,8 @@ export default function ToolPanel() {
     setPrimaryColor,
     secondaryColor,
     setSecondaryColor,
+    pressureSensitivityEnabled,
+    setPressureSensitivityEnabled,
   } = useDrawing();
 
   const { state } = useSidebar();
@@ -86,12 +84,9 @@ export default function ToolPanel() {
       {/* Header with Collapse Trigger */}
       <SidebarHeader className="flex flex-row items-center justify-between px-3 py-2 border-b h-14">
         {isExpanded && (
-         <span className="font-sans font-bold tracking-tight text-foreground flex items-center gap-1.5">
-              <span className="p-1 rounded-md bg-primary text-primary-foreground">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              FuKōbō <span className="text-muted-foreground font-medium text-sm hidden md:inline">Studio</span>
-            </span>
+          <span className="font-sans font-semibold text-xs tracking-wider uppercase text-muted-foreground">
+            Paint Studio
+          </span>
         )}
       </SidebarHeader>
 
@@ -168,6 +163,23 @@ export default function ToolPanel() {
                 onChange={(e) => setBrushOpacity(parseFloat(e.target.value) / 100)}
                 className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
               />
+            </div>
+
+            {/* Pressure Sensitivity */}
+            <div className="flex items-center justify-between pt-2 border-t mt-1.5">
+              <div className="flex flex-col gap-0.5 max-w-[120px]">
+                <span className="text-xs text-foreground/80 font-medium">Pressure Simulator</span>
+                <span className="text-[9px] text-muted-foreground leading-tight">Simulate stylus pressure on canvas</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={pressureSensitivityEnabled}
+                  onChange={(e) => setPressureSensitivityEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+              </label>
             </div>
           </SidebarGroup>
         )}
