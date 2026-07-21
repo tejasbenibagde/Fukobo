@@ -13,6 +13,25 @@ export interface Layer {
   blendMode: string;
 }
 
+export interface ArtworkLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+  opacity: number;
+  blendMode: string;
+  dataUrl: string; // Base64 png data of the layer
+}
+
+export interface Artwork {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  updatedAt: string;
+  thumbnail: string; // Base64 png thumbnail
+  layers: ArtworkLayer[];
+}
+
 export interface DrawingContextType {
   activeTool: ToolType;
   setActiveTool: (tool: ToolType) => void;
@@ -25,6 +44,23 @@ export interface DrawingContextType {
   secondaryColor: string;
   setSecondaryColor: (color: string) => void;
   
+  // Dashboard & Artworks management
+  isEditorActive: boolean;
+  setIsEditorActive: (active: boolean) => void;
+  artworks: Artwork[];
+  currentArtworkId: string | null;
+  setCurrentArtworkId: (id: string | null) => void;
+  canvasWidth: number;
+  setCanvasWidth: (w: number) => void;
+  canvasHeight: number;
+  setCanvasHeight: (h: number) => void;
+  canvasName: string;
+  setCanvasName: (name: string) => void;
+  saveCurrentArtwork: () => void;
+  loadArtwork: (id: string) => void;
+  createNewArtwork: (name: string, width: number, height: number) => void;
+  deleteArtwork: (id: string) => void;
+
   // fuderu canvas reference
   fuderuCanvasRef: MutableRefObject<Canvas | null>;
   syncLayers: () => void;

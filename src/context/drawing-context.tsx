@@ -1,10 +1,49 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/context/drawing-context.tsx
-import { createContext, useContext, useState, useRef, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useRef, ReactNode } from "react";
 import { Canvas } from "fuderu";
-import { ToolType, Layer, DrawingContextType } from "../types";
+import { ToolType, Layer, DrawingContextType, Artwork, ArtworkLayer } from "../types";
 
 const DrawingContext = createContext<DrawingContextType | undefined>(undefined);
+
+const initialArtworks: Artwork[] = [
+  {
+    id: "art-sample-1",
+    name: "Golden Sun Sketch",
+    width: 800,
+    height: 600,
+    updatedAt: new Date().toISOString(),
+    thumbnail: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'><rect width='100%' height='100%' fill='%23fafaf9'/><circle cx='400' cy='300' r='120' fill='%23f97316' opacity='0.45'/><path d='M100 520 Q 400 350, 700 520' stroke='%233b82f6' stroke-width='16' fill='none' stroke-linecap='round'/></svg>",
+    layers: [
+      {
+        id: "layer-1",
+        name: "Background",
+        visible: true,
+        opacity: 1,
+        blendMode: "source-over",
+        dataUrl: ""
+      }
+    ]
+  },
+  {
+    id: "art-sample-2",
+    name: "Calm Waves",
+    width: 800,
+    height: 600,
+    updatedAt: new Date(Date.now() - 3600000 * 3).toISOString(),
+    thumbnail: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'><rect width='100%' height='100%' fill='%23f5f5f4'/><path d='M100 400 C 250 300, 350 500, 700 400' stroke='%2306b6d4' stroke-width='14' fill='none' stroke-linecap='round'/><path d='M100 460 C 250 360, 350 560, 700 460' stroke='%2306b6d4' stroke-width='8' fill='none' stroke-linecap='round' opacity='0.5'/></svg>",
+    layers: [
+      {
+        id: "layer-1",
+        name: "Background",
+        visible: true,
+        opacity: 1,
+        blendMode: "source-over",
+        dataUrl: ""
+      }
+    ]
+  }
+];
 
 export function DrawingProvider({ children }: { children: ReactNode }) {
   const [activeTool, setActiveTool] = useState<ToolType>('brush');
@@ -28,6 +67,24 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 
   // fuderu canvas reference
   const fuderuCanvasRef = useRef<Canvas | null>(null);
+
+  // Dashboard & Artworks management state
+  const [isEditorActive, setIsEditorActive] = useState<boolean>(false);
+  const [artworks, setArtworks] = useState<Artwork[]>(() => {
+    const saved = localStorage.getItem("fukobo_artworks");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return initialArtworks;
+      }
+    }
+    return initialArtworks;
+  });
+  const [currentArtworkId, setCurrentArtworkId] = useState<string | null>(null);
+  const [canvasWidth, setCanvasWidth] = useState<number>(800);
+  const [canvasHeight, setCanvasHeight] = useState<number>(600);
+  const [canvasName, setCanvasName] = useState<string>("Untitled Canvas");
 
   // Layers state
   const [layers, setLayers] = useState<Layer[]>([
@@ -58,61 +115,138 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     setLayers([...mapped].reverse());
     setActiveLayerId(canvas.layers.getActiveId() || "");
     
-    if (canvas.history) {
-      setCanUndo(canvas.history.canUndo());
-      setCanRedo(canvas.history.canRedo());
+    setCanUndo(canvas.history.canUndo());
+    setCanRedo(canvas.history.canRedo());
+  };
+
+  const saveCurrentArtwork = () => {
+    if (!fuderuCanvasRef.current || !currentArtworkId) return;
+    const canvasInstance = fuderuCanvasRef.current;
+    
+    const canvasElement = document.querySelector('canvas');
+    const thumbnail = canvasElement ? canvasElement.toDataURL("image/png") : "";
+    
+    const fLayers = canvasInstance.getLayers();
+    const artworkLayers: ArtworkLayer[] = fLayers.map((l: any) => {
+      return {
+        id: l.id,
+        name: l.name,
+        visible: l.visible,
+        opacity: l.opacity,
+        blendMode: l.blendMode,
+        dataUrl: l.canvas ? l.canvas.toDataURL("image/png") : ""
+      };
+    });
+    
+    const updatedArtworks = artworks.map((art) => {
+      if (art.id === currentArtworkId) {
+        return {
+          ...art,
+          name: canvasName,
+          width: canvasWidth,
+          height: canvasHeight,
+          thumbnail,
+          layers: artworkLayers,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return art;
+    });
+    
+    setArtworks(updatedArtworks);
+    localStorage.setItem("fukobo_artworks", JSON.stringify(updatedArtworks));
+  };
+
+  const createNewArtwork = (name: string, width: number, height: number) => {
+    const newId = "art-" + Date.now();
+    const newArt: Artwork = {
+      id: newId,
+      name: name || "Untitled Artwork",
+      width: width || 800,
+      height: height || 600,
+      updatedAt: new Date().toISOString(),
+      thumbnail: "",
+      layers: [
+        {
+          id: "layer-1",
+          name: "Background",
+          visible: true,
+          opacity: 1,
+          blendMode: "source-over",
+          dataUrl: ""
+        }
+      ]
+    };
+    
+    const updated = [newArt, ...artworks];
+    setArtworks(updated);
+    localStorage.setItem("fukobo_artworks", JSON.stringify(updated));
+    
+    setCanvasWidth(width || 800);
+    setCanvasHeight(height || 600);
+    setCanvasName(name || "Untitled Artwork");
+    setCurrentArtworkId(newId);
+    
+    setLayers([
+      { id: "layer-1", name: "Background", visible: true, opacity: 1, blendMode: "source-over" }
+    ]);
+    setActiveLayerId("layer-1");
+    
+    setIsEditorActive(true);
+  };
+
+  const loadArtwork = (id: string) => {
+    const art = artworks.find(a => a.id === id);
+    if (!art) return;
+    
+    setCanvasWidth(art.width);
+    setCanvasHeight(art.height);
+    setCanvasName(art.name);
+    setCurrentArtworkId(art.id);
+    
+    setLayers(art.layers.map(l => ({
+      id: l.id,
+      name: l.name,
+      visible: l.visible,
+      opacity: l.opacity,
+      blendMode: l.blendMode
+    })));
+    
+    if (art.layers.length > 0) {
+      setActiveLayerId(art.layers[art.layers.length - 1].id);
+    }
+    
+    setIsEditorActive(true);
+  };
+
+  const deleteArtwork = (id: string) => {
+    const updated = artworks.filter(a => a.id !== id);
+    setArtworks(updated);
+    localStorage.setItem("fukobo_artworks", JSON.stringify(updated));
+    if (currentArtworkId === id) {
+      setCurrentArtworkId(null);
+      setIsEditorActive(false);
     }
   };
 
-  // Sync brush properties with fuderu whenever they change
-  useEffect(() => {
-    if (!fuderuCanvasRef.current) return;
-    const canvas = fuderuCanvasRef.current;
-    
-    canvas.pressureSimulation = pressureSensitivityEnabled;
-
-    canvas.loadConfig({
-      size: brushSize,
-      opacity: brushOpacity,
-      color: primaryColor,
-      eraser: activeTool === 'eraser',
-    });
-    canvas.setEraser(activeTool === 'eraser');
-    
-    // Pencil tool configures smoother but shorter spacing or sharp non-smoothed drawing
-    if (activeTool === 'pencil') {
-      canvas.setSmooth(false);
-      canvas.loadConfig({ spacing: 0.05 });
-    } else {
-      canvas.setSmooth(true);
-      canvas.loadConfig({ spacing: 0.12 });
-    }
-  }, [brushSize, brushOpacity, primaryColor, activeTool, pressureSensitivityEnabled]);
-
   const addLayer = () => {
     if (!fuderuCanvasRef.current) return;
-    const canvas = fuderuCanvasRef.current;
-    const num = canvas.getLayers().length;
-    canvas.createLayer({ name: `Layer ${num}` });
+    const count = layers.length + 1;
+    fuderuCanvasRef.current.createLayer({ name: `Layer ${count}` });
     syncLayers();
   };
 
   const deleteLayer = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    try {
-      fuderuCanvasRef.current.deleteLayer(id);
-      syncLayers();
-    } catch (e) {
-      console.error(e);
-    }
+    fuderuCanvasRef.current.deleteLayer(id);
+    syncLayers();
   };
 
   const toggleLayerVisibility = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    const canvas = fuderuCanvasRef.current;
-    const l = canvas.getLayers().find((x: any) => x.id === id);
-    if (l) {
-      canvas.updateLayer(id, { visible: !l.visible });
+    const layer = fuderuCanvasRef.current.getLayer(id);
+    if (layer) {
+      fuderuCanvasRef.current.updateLayer(id, { visible: !layer.visible });
       syncLayers();
     }
   };
@@ -145,10 +279,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
     
-    // In bottom-to-top order
     const targetIds = [...newLayers].reverse().map(l => l.id);
     
-    // Move layers in the canvas to match targetIds order
     for (let i = 0; i < targetIds.length; i++) {
       const id = targetIds[i];
       canvas.layers.moveLayer(id, i);
@@ -173,7 +305,6 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const clearCanvas = () => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.clear();
-    // Fill background with white
     const bg = fuderuCanvasRef.current.getLayers()[0];
     if (bg) {
       bg.ctx.fillStyle = "#ffffff";
@@ -196,6 +327,21 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         setPrimaryColor,
         secondaryColor,
         setSecondaryColor,
+        isEditorActive,
+        setIsEditorActive,
+        artworks,
+        currentArtworkId,
+        setCurrentArtworkId,
+        canvasWidth,
+        setCanvasWidth,
+        canvasHeight,
+        setCanvasHeight,
+        canvasName,
+        setCanvasName,
+        saveCurrentArtwork,
+        loadArtwork,
+        createNewArtwork,
+        deleteArtwork,
         fuderuCanvasRef,
         syncLayers,
         layers,
@@ -245,4 +391,3 @@ export function useDrawing() {
   }
   return context;
 }
-

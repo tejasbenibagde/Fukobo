@@ -8,7 +8,6 @@ import {
   ZoomIn, 
   ZoomOut, 
   Sparkles, 
-  Trash2,
 } from "lucide-react";
 import { Canvas, type HistoryEntry } from "fuderu";
 
@@ -46,7 +45,6 @@ export default function CanvasViewport() {
     setPrimaryColor,
     fuderuCanvasRef,
     syncLayers,
-    clearCanvas,
     fontFamily,
     isBold,
     isItalic,
@@ -54,6 +52,10 @@ export default function CanvasViewport() {
     strokeType,
     fillShape,
     pressureSensitivityEnabled,
+    canvasWidth,
+    canvasHeight,
+    currentArtworkId,
+    artworks,
   } = useDrawing();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -69,10 +71,10 @@ export default function CanvasViewport() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Create the fuderu Canvas instance
+    // Create the fuderu Canvas instance with custom size
     const fuderuCanvas = new Canvas({
       canvas,
-      document: { width: 800, height: 600 },
+      document: { width: canvasWidth, height: canvasHeight },
       pressureSimulation: pressureSensitivityEnabled,
       brush: {
         size: brushSize,
@@ -82,22 +84,73 @@ export default function CanvasViewport() {
       }
     });
 
-    // Fill background layer with solid white initially
-    const bg = fuderuCanvas.getLayers()[0];
-    if (bg) {
-      bg.ctx.fillStyle = "#ffffff";
-      bg.ctx.fillRect(0, 0, bg.canvas.width, bg.canvas.height);
-      (fuderuCanvas as any).renderLayers();
-    }
-
     fuderuCanvasRef.current = fuderuCanvas;
-    
-    // Sync React states initially
-    syncLayers();
+
+    // Load active artwork layers
+    const currentArtwork = artworks.find(a => a.id === currentArtworkId);
+    if (currentArtwork && currentArtwork.layers && currentArtwork.layers.length > 0) {
+      const defaultLayers = fuderuCanvas.getLayers();
+      const defaultLayerId = defaultLayers[0]?.id;
+
+      const loadPromises = currentArtwork.layers.map((layerData, idx) => {
+        return new Promise<void>((resolve) => {
+          let layer: any;
+          if (idx === 0 && defaultLayerId) {
+            layer = fuderuCanvas.getLayer(defaultLayerId);
+            if (layer) {
+              fuderuCanvas.updateLayer(defaultLayerId, {
+                name: layerData.name,
+                visible: layerData.visible,
+                opacity: layerData.opacity,
+                blendMode: layerData.blendMode as any,
+              });
+            }
+          } else {
+            layer = fuderuCanvas.createLayer({
+              name: layerData.name,
+              visible: layerData.visible,
+              opacity: layerData.opacity,
+              blendMode: layerData.blendMode as any,
+            });
+          }
+
+          if (layer && layerData.dataUrl) {
+            const img = new Image();
+            img.onload = () => {
+              layer.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+              layer.ctx.drawImage(img, 0, 0);
+              resolve();
+            };
+            img.onerror = () => {
+              resolve();
+            };
+            img.src = layerData.dataUrl;
+          } else {
+            if (idx === 0 && layer) {
+              layer.ctx.fillStyle = "#ffffff";
+              layer.ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            }
+            resolve();
+          }
+        });
+      });
+
+      Promise.all(loadPromises).then(() => {
+        (fuderuCanvas as any).renderLayers();
+        syncLayers();
+      });
+    } else {
+      const bg = fuderuCanvas.getLayers()[0];
+      if (bg) {
+        bg.ctx.fillStyle = "#ffffff";
+        bg.ctx.fillRect(0, 0, bg.canvas.width, bg.canvas.height);
+        (fuderuCanvas as any).renderLayers();
+      }
+      syncLayers();
+    }
 
     // Event listener to sync layers after user finishes drawing stroke
     const handlePointerUpWindow = () => {
-      // Small timeout to let endStroke finish and push onto the stack
       setTimeout(() => {
         syncLayers();
       }, 50);
@@ -110,9 +163,26 @@ export default function CanvasViewport() {
       window.removeEventListener("pointerup", handlePointerUpWindow);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentArtworkId]);
 
-  // Coordinate mapper from Client Coordinates to Internal 800x600 coordinates
+  // Dynamically sync brush size, opacity, color, and eraser state with the fuderu Canvas
+  useEffect(() => {
+    const fCanvas = fuderuCanvasRef.current;
+    if (!fCanvas) return;
+
+    fCanvas.pressureSimulation = pressureSensitivityEnabled;
+    fCanvas.setEraser(activeTool === "eraser");
+
+    if (fCanvas.brush) {
+      fCanvas.brush.loadConfig({
+        size: brushSize,
+        opacity: brushOpacity,
+        color: primaryColor,
+      });
+    }
+  }, [brushSize, brushOpacity, primaryColor, activeTool, pressureSensitivityEnabled, fuderuCanvasRef]);
+
+  // Coordinate mapper from Client Coordinates to Internal coordinates
   const getInternalCoords = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -127,45 +197,40 @@ export default function CanvasViewport() {
     };
   };
 
-  const handlePointerDownCapture = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const coords = getInternalCoords(e.clientX, e.clientY);
+    setMousePos(coords);
+  };
+
+  const handleOverlayPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const coords = getInternalCoords(e.clientX, e.clientY);
 
-    // If active tool is picker, bucket, shapes or text, stop propagation so fuderu doesn't brush-stroke draw
-    if (activeTool !== "brush" && activeTool !== "pencil" && activeTool !== "eraser") {
-      e.nativeEvent.stopImmediatePropagation();
-      e.stopPropagation();
-
-      if (activeTool === "picker") {
-        handlePicker(coords.x, coords.y);
-      } else if (activeTool === "bucket") {
-        handleBucket();
-      } else if (activeTool === "rectangle" || activeTool === "circle") {
-        setShapeStart(coords);
-        setShapeCurrent(coords);
-      } else if (activeTool === "text") {
-        const text = prompt("Enter text to render on active layer:");
-        if (text) {
-          drawText(text, coords.x, coords.y);
-        }
+    if (activeTool === "picker") {
+      handlePicker(coords.x, coords.y);
+    } else if (activeTool === "bucket") {
+      handleBucket();
+    } else if (activeTool === "rectangle" || activeTool === "circle") {
+      setShapeStart(coords);
+      setShapeCurrent(coords);
+    } else if (activeTool === "text") {
+      const text = prompt("Enter text to render on active layer:");
+      if (text) {
+        drawText(text, coords.x, coords.y);
       }
     }
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handleOverlayPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const coords = getInternalCoords(e.clientX, e.clientY);
     setMousePos(coords);
 
     if (shapeStart) {
-      e.nativeEvent.stopImmediatePropagation();
-      e.stopPropagation();
       setShapeCurrent(coords);
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handleOverlayPointerUp = () => {
     if (shapeStart && shapeCurrent) {
-      e.nativeEvent.stopImmediatePropagation();
-      e.stopPropagation();
       commitShape();
     }
   };
@@ -307,7 +372,6 @@ export default function CanvasViewport() {
     syncLayers();
   };
 
-  // Render SVG stroke/fill previews during real-time dragging
   const renderShapePreview = () => {
     if (!shapeStart || !shapeCurrent) return null;
 
@@ -324,7 +388,7 @@ export default function CanvasViewport() {
     const dashArray = isDashed ? "15,10" : isDotted ? "4,4" : undefined;
 
     return (
-      <svg className="absolute inset-0 pointer-events-none w-full h-full z-20" viewBox="0 0 800 600">
+      <svg className="absolute inset-0 pointer-events-none w-full h-full z-20" viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
         {activeTool === "rectangle" && (
           <rect
             x={Math.min(x1, x2)}
@@ -361,7 +425,7 @@ export default function CanvasViewport() {
       <div className="h-11 border-b bg-background/60 backdrop-blur-sm flex items-center justify-between px-4 text-xs">
         <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span>Canvas Status: <strong className="text-foreground">800 × 600px</strong></span>
+          <span>Canvas Size: <strong className="text-foreground">{canvasWidth} × {canvasHeight}px</strong></span>
         </div>
 
         {/* Viewport Actions */}
@@ -387,24 +451,11 @@ export default function CanvasViewport() {
           >
             <ZoomIn className="h-3.5 w-3.5" />
           </Button>
-
-          <div className="h-4 w-[1px] bg-border mx-1" />
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={clearCanvas}
-            title="Clear Painting"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
         </div>
       </div>
 
       {/* Main Drawing Stage Area */}
       <div className="flex-1 w-full overflow-auto flex items-center justify-center p-6 bg-secondary/30 relative">
-        {/* Transparent grid check pattern behind the canvas */}
         <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: 'radial-gradient(circle, #000 10%, transparent 11%)',
           backgroundSize: '12px 12px'
@@ -414,17 +465,27 @@ export default function CanvasViewport() {
         <div 
           className="bg-white rounded-lg shadow-xl border border-border/80 overflow-hidden transition-all duration-200 shrink-0 relative"
           style={{ 
+            width: canvasWidth,
+            height: canvasHeight,
             transform: `scale(${zoomLevel / 100})`,
             transformOrigin: "center center"
           }}
         >
           <canvas
             ref={canvasRef}
-            onPointerDownCapture={handlePointerDownCapture}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
+            onPointerMove={handleCanvasPointerMove}
             className="cursor-crosshair block shadow-inner bg-white"
           />
+
+          {/* Overlay to capture pointer events for non-drawing tools */}
+          {activeTool !== "brush" && activeTool !== "pencil" && activeTool !== "eraser" && (
+            <div
+              className="absolute inset-0 cursor-crosshair z-10"
+              onPointerDown={handleOverlayPointerDown}
+              onPointerMove={handleOverlayPointerMove}
+              onPointerUp={handleOverlayPointerUp}
+            />
+          )}
 
           {/* Real-time shape drag rendering overlay */}
           {renderShapePreview()}

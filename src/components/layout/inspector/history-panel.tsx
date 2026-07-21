@@ -23,20 +23,21 @@ export default function HistoryPanel({ style, className }: PanelProps = {}) {
   const getEntryLabel = (entry: any) => {
     if (!entry) return "Action";
     const name = entry.constructor?.name;
-    if (name === "CanvasStateHistoryEntry" || entry.hasOwnProperty("beforeData")) {
+    const hasOwn = (obj: any, prop: string) => obj && Object.prototype.hasOwnProperty.call(obj, prop);
+    if (name === "CanvasStateHistoryEntry" || hasOwn(entry, "beforeData")) {
       return "Draw Stroke";
     }
-    if (name === "LayerCreatedHistoryEntry" || (entry.hasOwnProperty("layer") && !entry.hasOwnProperty("index"))) {
+    if (name === "LayerCreatedHistoryEntry" || (hasOwn(entry, "layer") && !hasOwn(entry, "index"))) {
       return "Create Layer";
     }
-    if (name === "LayerDeletedHistoryEntry" || (entry.hasOwnProperty("layer") && entry.hasOwnProperty("index"))) {
+    if (name === "LayerDeletedHistoryEntry" || (hasOwn(entry, "layer") && hasOwn(entry, "index"))) {
       return "Delete Layer";
     }
-    if (name === "LayerPropertyHistoryEntry" || entry.hasOwnProperty("propertyName")) {
+    if (name === "LayerPropertyHistoryEntry" || hasOwn(entry, "propertyName")) {
       const prop = entry.propertyName || "Property";
       return `Change ${prop.charAt(0).toUpperCase() + prop.slice(1)}`;
     }
-    if (name === "MoveLayerHistoryEntry" || entry.hasOwnProperty("beforeIndex")) {
+    if (name === "MoveLayerHistoryEntry" || hasOwn(entry, "beforeIndex")) {
       return "Reorder Layer";
     }
     return "Edit Canvas";

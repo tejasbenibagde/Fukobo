@@ -4,10 +4,18 @@ import Inspector from "../inspector/inspector";
 import StatusBar from "../statusbar/statusbar";
 import ToolPanel from "../tool-panel/tool-panel";
 import Toolbar from "../toolbar/toolbar";
+import Dashboard from "../dashboard/dashboard";
 
 import { SidebarInset } from "@/components/ui/sidebar";
+import { useDrawing } from "@/context/drawing-context";
 
 export default function Workspace() {
+    const { isEditorActive } = useDrawing();
+
+    if (!isEditorActive) {
+        return <Dashboard />;
+    }
+
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-secondary select-none" >
             <ToolPanel />
