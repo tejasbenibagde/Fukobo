@@ -78,6 +78,7 @@
       replayStack,
       setReplayStack,
       loadArtwork,
+      activeLayerId,
     } = useDrawing();
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -94,6 +95,11 @@
     const [replaySpeed, setReplaySpeed] = useState(1);
     const replayIndexRef = useRef(0);
     const replayTimeoutRef = useRef<any>(null);
+
+    const isReplayingRef = useRef(isReplaying);
+    useEffect(() => {
+      isReplayingRef.current = isReplaying;
+    }, [isReplaying]);
 
     // Initialize fuderu Canvas
     useEffect(() => {
@@ -171,7 +177,13 @@
         });
 
         Promise.all(loadPromises).then(() => {
-          (fuderuCanvas as any).renderLayers();
+          // Set active layer to the top-most layer to correctly initialize Brush's context and prevent state clearing on first stroke
+          const topLayerData = currentArtwork.layers[currentArtwork.layers.length - 1];
+          if (topLayerData) {
+            fuderuCanvas.setActiveLayer(topLayerData.id);
+          } else {
+            (fuderuCanvas as any).renderLayers();
+          }
           syncLayers();
         });
       } else {
@@ -196,6 +208,7 @@
       };
 
       const handlePointerDownCanvas = (e: PointerEvent) => {
+        if (isReplayingRef.current) return;
         if (activeTool !== "brush" && activeTool !== "pencil" && activeTool !== "eraser") return;
         isDrawingStroke = true;
         strokePoints = [];
@@ -204,6 +217,7 @@
       };
 
       const handlePointerMoveCanvas = (e: PointerEvent) => {
+        if (isReplayingRef.current) return;
         if (!isDrawingStroke) return;
         const coords = getInternalCoords(e.clientX, e.clientY);
         strokePoints.push({ x: coords.x, y: coords.y, pressure: e.pressure ?? 0.5 });
@@ -288,6 +302,7 @@
     };
 
     const handleOverlayPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+      if (isReplaying) return;
       const coords = getInternalCoords(e.clientX, e.clientY);
 
       if (activeTool === "picker") {
@@ -306,6 +321,7 @@
     };
 
     const handleOverlayPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+      if (isReplaying) return;
       const coords = getInternalCoords(e.clientX, e.clientY);
       setMousePos(coords);
 
@@ -315,6 +331,7 @@
     };
 
     const handleOverlayPointerUp = () => {
+      if (isReplaying) return;
       if (shapeStart && shapeCurrent) {
         commitShape();
       }
@@ -512,6 +529,88 @@
       setReplayStack(prev => [...prev, action]);
     };
 
+    const restoreArtworkLayersFromSaved = () => {
+      const fuderuCanvas = fuderuCanvasRef.current;
+      if (!fuderuCanvas) return;
+
+      const currentArtwork = artworks.find(a => a.id === currentArtworkId);
+      if (currentArtwork && currentArtwork.layers && currentArtwork.layers.length > 0) {
+        fuderuCanvas.clear();
+        const allLayers = [...fuderuCanvas.getLayers()];
+        for (let i = allLayers.length - 1; i > 0; i--) {
+          fuderuCanvas.deleteLayer(allLayers[i].id);
+        }
+
+        const defaultLayerId = fuderuCanvas.getLayers()[0]?.id;
+
+        const loadPromises = currentArtwork.layers.map((layerData, idx) => {
+          return new Promise<void>((resolve) => {
+            let layer: any;
+            if (idx === 0 && defaultLayerId) {
+              layer = getLayerCompat(fuderuCanvas, defaultLayerId);
+              if (layer) {
+                layer.id = layerData.id;
+                if (fuderuCanvas.layers && (fuderuCanvas.layers as any).activeLayerId === defaultLayerId) {
+                  (fuderuCanvas.layers as any).activeLayerId = layerData.id;
+                }
+                fuderuCanvas.updateLayer(layerData.id, {
+                  name: layerData.name,
+                  visible: layerData.visible,
+                  opacity: layerData.opacity,
+                  blendMode: layerData.blendMode as any,
+                });
+              }
+            } else {
+              layer = fuderuCanvas.createLayer({
+                id: layerData.id,
+                name: layerData.name,
+                visible: layerData.visible,
+                opacity: layerData.opacity,
+                blendMode: layerData.blendMode as any,
+              });
+            }
+
+            if (layer && layerData.dataUrl) {
+              const img = new Image();
+              img.onload = () => {
+                layer.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                layer.ctx.drawImage(img, 0, 0);
+                resolve();
+              };
+              img.onerror = () => {
+                resolve();
+              };
+              img.src = layerData.dataUrl;
+            } else {
+              if (idx === 0 && layer) {
+                layer.ctx.fillStyle = "#ffffff";
+                layer.ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+              }
+              resolve();
+            }
+          });
+        });
+
+        Promise.all(loadPromises).then(() => {
+          const topLayerData = currentArtwork.layers[currentArtwork.layers.length - 1];
+          if (topLayerData) {
+            fuderuCanvas.setActiveLayer(topLayerData.id);
+          } else {
+            (fuderuCanvas as any).renderLayers();
+          }
+          syncLayers();
+        });
+      } else {
+        const bg = fuderuCanvas.getLayers()[0];
+        if (bg) {
+          bg.ctx.fillStyle = "#ffffff";
+          bg.ctx.fillRect(0, 0, bg.canvas.width, bg.canvas.height);
+          (fuderuCanvas as any).renderLayers();
+        }
+        syncLayers();
+      }
+    };
+
     const stopReplay = () => {
       if (replayTimeoutRef.current) {
         clearTimeout(replayTimeoutRef.current);
@@ -520,6 +619,7 @@
       setIsReplaying(false);
       if (currentArtworkId) {
         loadArtwork(currentArtworkId);
+        restoreArtworkLayersFromSaved();
       }
     };
 
@@ -554,6 +654,13 @@
 
       if (replayIndexRef.current >= replayStack.length) {
         setIsReplaying(false);
+        const targetId = activeLayerId && canvas.getLayers().some((l: any) => l.id === activeLayerId)
+          ? activeLayerId
+          : (canvas.getLayers()[canvas.getLayers().length - 1]?.id || "");
+        if (targetId) {
+          canvas.setActiveLayer(targetId);
+        }
+        syncLayers();
         return;
       }
 
