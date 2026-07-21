@@ -22,6 +22,35 @@ export interface ArtworkLayer {
   dataUrl: string; // Base64 png data of the layer
 }
 
+export interface ReplayAction {
+  id: string;
+  type: 'stroke' | 'clear' | 'addLayer' | 'deleteLayer' | 'renameLayer' | 'setLayerOpacity' | 'setLayerBlendMode' | 'reorderLayers' | 'bucket' | 'shape' | 'text';
+  timestamp: number;
+  data: {
+    points?: { x: number; y: number; pressure: number }[];
+    tool?: string;
+    size?: number;
+    opacity?: number;
+    color?: string;
+    layerId?: string;
+    layerName?: string;
+    blendMode?: string;
+    index?: number;
+    targetIds?: string[];
+    shapeType?: string;
+    startPoint?: { x: number; y: number };
+    endPoint?: { x: number; y: number };
+    strokeType?: string;
+    fillShape?: boolean;
+    text?: string;
+    fontFamily?: string;
+    isBold?: boolean;
+    isItalic?: boolean;
+    textAlign?: string;
+    visible?: boolean;
+  };
+}
+
 export interface Artwork {
   id: string;
   name: string;
@@ -30,6 +59,7 @@ export interface Artwork {
   updatedAt: string;
   thumbnail: string; // Base64 png thumbnail
   layers: ArtworkLayer[];
+  replayStack?: ReplayAction[];
 }
 
 export interface DrawingContextType {
@@ -105,5 +135,9 @@ export interface DrawingContextType {
   setFillShape: (fill: boolean) => void;
   pressureSensitivityEnabled: boolean;
   setPressureSensitivityEnabled: (enabled: boolean) => void;
+
+  // Replay Stack State
+  replayStack: ReplayAction[];
+  setReplayStack: React.Dispatch<React.SetStateAction<ReplayAction[]>>;
 }
 

@@ -2,7 +2,7 @@
 // src/context/drawing-context.tsx
 import { createContext, useContext, useState, useRef, ReactNode } from "react";
 import { Canvas } from "fuderu";
-import { ToolType, Layer, DrawingContextType, Artwork, ArtworkLayer } from "../types";
+import { ToolType, Layer, DrawingContextType, Artwork, ArtworkLayer, ReplayAction } from "../types";
 
 const DrawingContext = createContext<DrawingContextType | undefined>(undefined);
 
@@ -96,6 +96,25 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const [canUndo, setCanUndo] = useState<boolean>(false);
   const [canRedo, setCanRedo] = useState<boolean>(false);
 
+  // Replay Stack state
+  const [replayStack, setReplayStack] = useState<ReplayAction[]>([]);
+
+  // Helper to compatibly and safely find a layer on the canvas instance
+  const getLayerCompat = (canvasObj: any, id: string) => {
+    if (!canvasObj) return undefined;
+    if (typeof canvasObj.getLayer === "function") {
+      return canvasObj.getLayer(id);
+    }
+    if (canvasObj.layers && typeof canvasObj.layers.getById === "function") {
+      try {
+        return canvasObj.layers.getById(id);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+
   // Synchronize layers from fuderu canvas to React state
   const syncLayers = () => {
     if (!fuderuCanvasRef.current) return;
@@ -115,8 +134,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     setLayers([...mapped].reverse());
     setActiveLayerId(canvas.layers.getActiveId() || "");
     
-    setCanUndo(canvas.history.canUndo());
-    setCanRedo(canvas.history.canRedo());
+    setCanUndo(canvas.history ? canvas.history.canUndo() : false);
+    setCanRedo(canvas.history ? canvas.history.canRedo() : false);
   };
 
   const saveCurrentArtwork = () => {
@@ -147,6 +166,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
           height: canvasHeight,
           thumbnail,
           layers: artworkLayers,
+          replayStack,
           updatedAt: new Date().toISOString()
         };
       }
@@ -186,6 +206,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     setCanvasHeight(height || 600);
     setCanvasName(name || "Untitled Artwork");
     setCurrentArtworkId(newId);
+    setReplayStack([]);
     
     setLayers([
       { id: "layer-1", name: "Background", visible: true, opacity: 1, blendMode: "source-over" }
@@ -203,6 +224,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     setCanvasHeight(art.height);
     setCanvasName(art.name);
     setCurrentArtworkId(art.id);
+    setReplayStack(art.replayStack || []);
     
     setLayers(art.layers.map(l => ({
       id: l.id,
@@ -232,22 +254,56 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const addLayer = () => {
     if (!fuderuCanvasRef.current) return;
     const count = layers.length + 1;
-    fuderuCanvasRef.current.createLayer({ name: `Layer ${count}` });
+    const layer = fuderuCanvasRef.current.createLayer({ name: `Layer ${count}` });
     syncLayers();
+    
+    if (layer) {
+      const action: ReplayAction = {
+        id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+        type: 'addLayer',
+        timestamp: Date.now(),
+        data: {
+          layerId: layer.id,
+          layerName: layer.name,
+        }
+      };
+      setReplayStack(prev => [...prev, action]);
+    }
   };
 
   const deleteLayer = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.deleteLayer(id);
     syncLayers();
+    
+    const action: ReplayAction = {
+      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      type: 'deleteLayer',
+      timestamp: Date.now(),
+      data: {
+        layerId: id,
+      }
+    };
+    setReplayStack(prev => [...prev, action]);
   };
 
   const toggleLayerVisibility = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    const layer = fuderuCanvasRef.current.getLayer(id);
+    const layer = getLayerCompat(fuderuCanvasRef.current, id);
     if (layer) {
       fuderuCanvasRef.current.updateLayer(id, { visible: !layer.visible });
       syncLayers();
+      
+      const action: ReplayAction = {
+        id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+        type: 'setLayerOpacity', // Use a property update category
+        timestamp: Date.now(),
+        data: {
+          layerId: id,
+          visible: !layer.visible,
+        }
+      };
+      setReplayStack(prev => [...prev, action]);
     }
   };
 
@@ -255,18 +311,51 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.updateLayer(id, { opacity });
     syncLayers();
+    
+    const action: ReplayAction = {
+      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      type: 'setLayerOpacity',
+      timestamp: Date.now(),
+      data: {
+        layerId: id,
+        opacity,
+      }
+    };
+    setReplayStack(prev => [...prev, action]);
   };
 
   const setLayerBlendMode = (id: string, blendMode: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.updateLayer(id, { blendMode: blendMode as any });
     syncLayers();
+    
+    const action: ReplayAction = {
+      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      type: 'setLayerBlendMode',
+      timestamp: Date.now(),
+      data: {
+        layerId: id,
+        blendMode,
+      }
+    };
+    setReplayStack(prev => [...prev, action]);
   };
 
   const renameLayer = (id: string, name: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.updateLayer(id, { name });
     syncLayers();
+    
+    const action: ReplayAction = {
+      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      type: 'renameLayer',
+      timestamp: Date.now(),
+      data: {
+        layerId: id,
+        layerName: name,
+      }
+    };
+    setReplayStack(prev => [...prev, action]);
   };
 
   const handleSetActiveLayerId = (id: string) => {
@@ -288,12 +377,25 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     
     canvas.renderLayers();
     syncLayers();
+    
+    const action: ReplayAction = {
+      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      type: 'reorderLayers',
+      timestamp: Date.now(),
+      data: {
+        targetIds,
+      }
+    };
+    setReplayStack(prev => [...prev, action]);
   };
 
   const undo = () => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.undo();
     syncLayers();
+    
+    // Pop the last action from replayStack to keep it pristine
+    setReplayStack(prev => prev.slice(0, -1));
   };
 
   const redo = () => {
@@ -312,6 +414,14 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
       (fuderuCanvasRef.current as any).renderLayers();
     }
     syncLayers();
+    
+    const action: ReplayAction = {
+      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      type: 'clear',
+      timestamp: Date.now(),
+      data: {}
+    };
+    setReplayStack(prev => [...prev, action]);
   };
 
   return (
@@ -377,6 +487,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         setFillShape,
         pressureSensitivityEnabled,
         setPressureSensitivityEnabled,
+        replayStack,
+        setReplayStack,
       }}
     >
       {children}
