@@ -1,9 +1,9 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.tejas.fukobo",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "FuKōbō",
   "directories": {
     "output": "release/${version}"
   },
@@ -17,27 +17,26 @@
     ],
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
-  "win": {
-    "target": [
+  win: {
+    icon: "build/icon.ico",
+
+    target: [
       {
-        "target": "nsis",
-        "arch": [
-          "x64"
-        ]
+        target: "nsis",
+        arch: ["x64"]
+      },
+      {
+        target: "msi",
+        arch: ["x64"]
       }
-    ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    ]
   },
-  "nsis": {
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
-  },
-  "linux": {
-    "target": [
-      "AppImage"
-    ],
-    "artifactName": "${productName}-Linux-${version}.${ext}"
+
+  nsis: {
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: "FuKōbō"
   }
 }

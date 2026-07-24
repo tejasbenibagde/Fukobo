@@ -7,9 +7,22 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies and generated web bundles
+/node_modules/
+/dist/
+/dist-ssr/
+
+# Generated Electron bundles and installers. Publish installers as GitHub
+# Release assets (or build them in CI), not as repository files.
+/dist-electron/
+/release/
+
+# Local environment values; commit a separate .env.example if needed.
+.env
+.env.*
+!.env.example
+
+# Keep build/ tracked: it contains source packaging assets such as icon.png.
 *.local
 
 # Editor directories and files
@@ -22,6 +35,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-dist-electron/
-electron/
