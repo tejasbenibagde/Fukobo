@@ -52,6 +52,8 @@ export interface ReplayAction {
     isItalic?: boolean;
     textAlign?: string;
     visible?: boolean;
+    x?: number;
+    y?: number;
   };
 }
 

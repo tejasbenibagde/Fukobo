@@ -118,6 +118,8 @@
                   visible: layerData.visible,
                   opacity: layerData.opacity,
                   blendMode: layerData.blendMode as any,
+                  alphaLock: layerData.alphaLock ?? false,
+                  locked: layerData.locked ?? false,
                 });
               }
             } else {
@@ -127,6 +129,8 @@
                 visible: layerData.visible,
                 opacity: layerData.opacity,
                 blendMode: layerData.blendMode as any,
+                alphaLock: layerData.alphaLock ?? false,
+                locked: layerData.locked ?? false,
               });
             }
 
@@ -184,7 +188,20 @@
 
       const handlePointerDownCanvas = (e: PointerEvent) => {
         if (isReplayingRef.current) return;
-        if (activeTool !== "brush" && activeTool !== "pencil" && activeTool !== "eraser") return;
+
+        const activeLayer = fuderuCanvas.getActiveLayer();
+        if (activeLayer && (activeLayer as any).locked) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return;
+        }
+
+        if (activeTool !== "brush" && activeTool !== "pencil" && activeTool !== "eraser") {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return;
+        }
+
         isDrawingStroke = true;
         strokePoints = [];
         const coords = getInternalCoords(e.clientX, e.clientY);
@@ -225,14 +242,14 @@
         }, 50);
       };
 
-      canvas.addEventListener("pointerdown", handlePointerDownCanvas);
+      canvas.addEventListener("pointerdown", handlePointerDownCanvas, true);
       canvas.addEventListener("pointermove", handlePointerMoveCanvas);
       window.addEventListener("pointerup", handlePointerUpWindow);
 
       return () => {
         fuderuCanvas.destroy();
         fuderuCanvasRef.current = null;
-        canvas.removeEventListener("pointerdown", handlePointerDownCanvas);
+        canvas.removeEventListener("pointerdown", handlePointerDownCanvas, true);
         canvas.removeEventListener("pointermove", handlePointerMoveCanvas);
         window.removeEventListener("pointerup", handlePointerUpWindow);
       };
@@ -280,10 +297,18 @@
       if (isReplaying) return;
       const coords = getInternalCoords(e.clientX, e.clientY);
 
+      const canvasObj = fuderuCanvasRef.current;
+      if (!canvasObj) return;
+
+      const activeLayer = canvasObj.getActiveLayer();
+      if (activeLayer && (activeLayer as any).locked) {
+        return;
+      }
+
       if (activeTool === "picker") {
         handlePicker(coords.x, coords.y);
       } else if (activeTool === "bucket") {
-        handleBucket();
+        handleBucket(coords.x, coords.y);
       } else if (activeTool === "rectangle" || activeTool === "circle") {
         setShapeStart(coords);
         setShapeCurrent(coords);
@@ -334,13 +359,15 @@
       setPrimaryColor(hex);
     };
 
-    const handleBucket = () => {
+    const handleBucket = (x: number, y: number) => {
       if (!fuderuCanvasRef.current) return;
       const canvas = fuderuCanvasRef.current;
       const activeLayer = canvas.getActiveLayer();
       if (!activeLayer || (activeLayer as any).locked) return;
 
-      if (typeof canvas.fillActiveLayer === "function") {
+      if (typeof canvas.floodFill === "function") {
+        canvas.floodFill(Math.round(x), Math.round(y), primaryColor, 32);
+      } else if (typeof canvas.fillActiveLayer === "function") {
         canvas.fillActiveLayer(primaryColor);
       } else {
         const ctx = activeLayer.ctx;
@@ -362,6 +389,8 @@
           color: primaryColor,
           opacity: brushOpacity,
           layerId: activeLayer.id,
+          x,
+          y
         }
       };
       setReplayStack(prev => [...prev, action]);
@@ -512,6 +541,8 @@
                   visible: layerData.visible,
                   opacity: layerData.opacity,
                   blendMode: layerData.blendMode as any,
+                  alphaLock: layerData.alphaLock ?? false,
+                  locked: layerData.locked ?? false,
                 });
               }
             } else {
@@ -521,6 +552,8 @@
                 visible: layerData.visible,
                 opacity: layerData.opacity,
                 blendMode: layerData.blendMode as any,
+                alphaLock: layerData.alphaLock ?? false,
+                locked: layerData.locked ?? false,
               });
             }
 
@@ -670,13 +703,18 @@
           }
         } else if (type === 'bucket') {
           if (data.layerId) {
-            const layer = getLayerCompat(canvas, data.layerId);
-            if (layer) {
-              layer.ctx.save();
-              layer.ctx.fillStyle = data.color || "#000000";
-              layer.ctx.globalAlpha = data.opacity ?? 1;
-              layer.ctx.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
-              layer.ctx.restore();
+            canvas.setActiveLayer(data.layerId);
+            if (data.x !== undefined && data.y !== undefined && typeof canvas.floodFill === "function") {
+              canvas.floodFill(Math.round(data.x), Math.round(data.y), data.color || "#000000", 32);
+            } else {
+              const layer = getLayerCompat(canvas, data.layerId);
+              if (layer) {
+                layer.ctx.save();
+                layer.ctx.fillStyle = data.color || "#000000";
+                layer.ctx.globalAlpha = data.opacity ?? 1;
+                layer.ctx.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
+                layer.ctx.restore();
+              }
             }
           }
         } else if (type === 'shape') {

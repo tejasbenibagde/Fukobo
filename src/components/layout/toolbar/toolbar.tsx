@@ -67,7 +67,7 @@ export default function Toolbar() {
                 saveCurrentArtwork();
                 setIsEditorActive(false);
               }}
-              className="h-8 text-xs font-semibold gap-1.5 hover:bg-stone-100 hover:text-stone-900 text-stone-600 transition-all border border-stone-200"
+              className="h-8 text-xs font-semibold gap-1.5 transition-all text-foreground hover:bg-accent hover:text-accent-foreground border border-input"
               title="Save & return to gallery"
             >
               <Home className="h-3.5 w-3.5" />

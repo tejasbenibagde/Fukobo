@@ -314,7 +314,7 @@ export default function Dashboard() {
                                   deleteArtwork(art.id);
                                   setConfirmDeleteId(null);
                                 }}
-                                className="px-2 py-1 text-[10px] font-bold bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors"
+                                className="px-2.5 py-1 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors shadow-2xs"
                               >
                                 Yes
                               </button>
@@ -323,7 +323,7 @@ export default function Dashboard() {
                                   e.stopPropagation();
                                   setConfirmDeleteId(null);
                                 }}
-                                className="px-2 py-1 text-[10px] font-bold bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-md transition-colors"
+                                className="px-2.5 py-1 text-xs font-bold bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-md transition-colors shadow-2xs"
                               >
                                 No
                               </button>

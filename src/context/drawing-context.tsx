@@ -317,6 +317,12 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     if (layer) {
       const nextVal = !(layer as any).alphaLock;
       fuderuCanvasRef.current.updateLayer(id, { alphaLock: nextVal });
+      if (fuderuCanvasRef.current.getBrush()) {
+        const activeLayer = fuderuCanvasRef.current.getActiveLayer();
+        if (activeLayer && activeLayer.id === id) {
+          fuderuCanvasRef.current.getBrush().isAlphaLocked = nextVal;
+        }
+      }
       syncLayers();
     }
   };
@@ -385,7 +391,12 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const handleSetActiveLayerId = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.setActiveLayer(id);
+    const activeL = fuderuCanvasRef.current.getActiveLayer();
+    if (activeL && fuderuCanvasRef.current.getBrush()) {
+      fuderuCanvasRef.current.getBrush().isAlphaLocked = !!(activeL as any).alphaLock;
+    }
     setActiveLayerId(id);
+    syncLayers();
   };
 
   const reorderLayers = (newLayers: Layer[]) => {
