@@ -11,6 +11,8 @@ export interface Layer {
   visible: boolean;
   opacity: number; // 0 to 1
   blendMode: string;
+  alphaLock?: boolean;
+  locked?: boolean;
 }
 
 export interface ArtworkLayer {
@@ -19,6 +21,8 @@ export interface ArtworkLayer {
   visible: boolean;
   opacity: number;
   blendMode: string;
+  alphaLock?: boolean;
+  locked?: boolean;
   dataUrl: string; // Base64 png data of the layer
 }
 
@@ -102,6 +106,8 @@ export interface DrawingContextType {
   addLayer: () => void;
   deleteLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
+  toggleAlphaLock: (id: string) => void;
+  toggleLayerLock: (id: string) => void;
   setLayerOpacity: (id: string, opacity: number) => void;
   setLayerBlendMode: (id: string, blendMode: string) => void;
   renameLayer: (id: string, name: string) => void;

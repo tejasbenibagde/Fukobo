@@ -12,7 +12,7 @@
     Square,
     X,
   } from "lucide-react";
-  import { Canvas, type HistoryEntry } from "fuderu";
+  import { Canvas } from "fuderu";
   import { ReplayAction } from "@/types";
 
   const getLayerCompat = (canvasObj: any, id: string) => {
@@ -29,31 +29,6 @@
     }
     return undefined;
   };
-
-  class CustomCanvasStateHistoryEntry implements HistoryEntry {
-    constructor(
-      public layerId: string,
-      public beforeData: ImageData,
-      public afterData: ImageData,
-      private canvas: any
-    ) {}
-
-    undo() {
-      const layer = getLayerCompat(this.canvas, this.layerId);
-      if (layer) {
-        layer.ctx.putImageData(this.beforeData, 0, 0);
-        this.canvas.renderLayers();
-      }
-    }
-
-    redo() {
-      const layer = getLayerCompat(this.canvas, this.layerId);
-      if (layer) {
-        layer.ctx.putImageData(this.afterData, 0, 0);
-        this.canvas.renderLayers();
-      }
-    }
-  }
 
   export default function CanvasViewport() {
     const {
@@ -338,6 +313,15 @@
     };
 
     const handlePicker = (x: number, y: number) => {
+      const fCanvas = fuderuCanvasRef.current;
+      if (!fCanvas) return;
+      if (typeof fCanvas.getColorAt === "function") {
+        const sample = fCanvas.getColorAt(x, y, "composite");
+        if (sample && sample.hex) {
+          setPrimaryColor(sample.hex);
+          return;
+        }
+      }
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
@@ -354,24 +338,20 @@
       if (!fuderuCanvasRef.current) return;
       const canvas = fuderuCanvasRef.current;
       const activeLayer = canvas.getActiveLayer();
-      if (!activeLayer) return;
+      if (!activeLayer || (activeLayer as any).locked) return;
 
-      const ctx = activeLayer.ctx;
-      const beforeData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
-
-      ctx.save();
-      ctx.fillStyle = primaryColor;
-      ctx.globalAlpha = brushOpacity;
-      ctx.fillRect(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
-      ctx.restore();
-
-      const afterData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
-      const entry = new CustomCanvasStateHistoryEntry(activeLayer.id, beforeData, afterData, canvas);
-      if (canvas.history && typeof canvas.history.push === "function") {
-        canvas.history.push(entry);
+      if (typeof canvas.fillActiveLayer === "function") {
+        canvas.fillActiveLayer(primaryColor);
+      } else {
+        const ctx = activeLayer.ctx;
+        ctx.save();
+        ctx.fillStyle = primaryColor;
+        ctx.globalAlpha = brushOpacity;
+        ctx.fillRect(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+        ctx.restore();
+        canvas.renderLayers();
       }
 
-      (canvas as any).renderLayers();
       syncLayers();
 
       const action: ReplayAction = {
@@ -391,19 +371,7 @@
       if (!shapeStart || !shapeCurrent || !fuderuCanvasRef.current) return;
       const canvas = fuderuCanvasRef.current;
       const activeLayer = canvas.getActiveLayer();
-      if (!activeLayer) return;
-
-      const ctx = activeLayer.ctx;
-      const beforeData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
-
-      ctx.save();
-
-      ctx.lineWidth = brushSize;
-      ctx.strokeStyle = primaryColor;
-      ctx.fillStyle = primaryColor;
-      ctx.globalAlpha = brushOpacity;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
+      if (!activeLayer || (activeLayer as any).locked) return;
 
       const x1 = shapeStart.x;
       const y1 = shapeStart.y;
@@ -414,44 +382,41 @@
       const height = y2 - y1;
 
       if (activeTool === "rectangle") {
-        if (fillShape) {
-          ctx.fillRect(x1, y1, width, height);
-        } else {
-          if (strokeType === "dashed") {
-            ctx.setLineDash([15, 10]);
-          } else if (strokeType === "dotted") {
-            ctx.setLineDash([4, 4]);
-          }
-          ctx.strokeRect(x1, y1, width, height);
+        if (typeof canvas.drawRectangle === "function") {
+          canvas.drawRectangle({
+            x: Math.min(x1, x2),
+            y: Math.min(y1, y2),
+            width: Math.abs(width),
+            height: Math.abs(height),
+            fill: fillShape,
+            stroke: !fillShape,
+            fillColor: primaryColor,
+            strokeColor: primaryColor,
+            strokeWidth: brushSize,
+          });
         }
       } else if (activeTool === "circle") {
-        ctx.beginPath();
-        const rx = Math.abs(width) / 2;
-        const ry = Math.abs(height) / 2;
-        const cx = x1 + width / 2;
-        const cy = y1 + height / 2;
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
-        if (fillShape) {
-          ctx.fill();
-        } else {
-          if (strokeType === "dashed") {
-            ctx.setLineDash([15, 10]);
-          } else if (strokeType === "dotted") {
-            ctx.setLineDash([4, 4]);
-          }
-          ctx.stroke();
+        if (typeof canvas.drawEllipse === "function") {
+          const rx = Math.abs(width) / 2;
+          const ry = Math.abs(height) / 2;
+          const cx = Math.min(x1, x2) + rx;
+          const cy = Math.min(y1, y2) + ry;
+
+          canvas.drawEllipse({
+            x: cx,
+            y: cy,
+            radiusX: rx,
+            radiusY: ry,
+            fill: fillShape,
+            stroke: !fillShape,
+            fillColor: primaryColor,
+            strokeColor: primaryColor,
+            strokeWidth: brushSize,
+          });
         }
       }
 
-      ctx.restore();
-
-      const afterData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
-      const entry = new CustomCanvasStateHistoryEntry(activeLayer.id, beforeData, afterData, canvas);
-      if (canvas.history && typeof canvas.history.push === "function") {
-        canvas.history.push(entry);
-      }
-
-      (canvas as any).renderLayers();
+      syncLayers();
 
       const action: ReplayAction = {
         id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
@@ -473,40 +438,29 @@
 
       setShapeStart(null);
       setShapeCurrent(null);
-      syncLayers();
     };
 
     const drawText = (text: string, x: number, y: number) => {
       if (!fuderuCanvasRef.current) return;
       const canvas = fuderuCanvasRef.current;
       const activeLayer = canvas.getActiveLayer();
-      if (!activeLayer) return;
+      if (!activeLayer || (activeLayer as any).locked) return;
 
-      const ctx = activeLayer.ctx;
-      const beforeData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
+      let fontStyleStr = "";
+      if (isItalic) fontStyleStr += "italic ";
 
-      ctx.save();
-
-      ctx.fillStyle = primaryColor;
-      ctx.globalAlpha = brushOpacity;
-
-      let fontStyle = "";
-      if (isItalic) fontStyle += "italic ";
-      if (isBold) fontStyle += "bold ";
-      ctx.font = `${fontStyle}${brushSize * 2}px ${fontFamily}, sans-serif`;
-      ctx.textAlign = textAlign as CanvasTextAlign;
-      ctx.textBaseline = "middle";
-
-      ctx.fillText(text, x, y);
-      ctx.restore();
-
-      const afterData = ctx.getImageData(0, 0, activeLayer.canvas.width, activeLayer.canvas.height);
-      const entry = new CustomCanvasStateHistoryEntry(activeLayer.id, beforeData, afterData, canvas);
-      if (canvas.history && typeof canvas.history.push === "function") {
-        canvas.history.push(entry);
+      if (typeof canvas.drawText === "function") {
+        canvas.drawText(text, x, y, {
+          fontSize: brushSize * 2,
+          fontFamily: fontFamily || "sans-serif",
+          fontWeight: isBold ? "bold" : "normal",
+          fontStyle: fontStyleStr,
+          color: primaryColor,
+          align: (textAlign as CanvasTextAlign) || "center",
+          baseline: "middle",
+        });
       }
 
-      (canvas as any).renderLayers();
       syncLayers();
 
       const action: ReplayAction = {

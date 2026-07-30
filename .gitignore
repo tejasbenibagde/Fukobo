@@ -17,6 +17,9 @@ lerna-debug.log*
 /dist-electron/
 /release/
 
+# Local product/package assessment; intentionally not published with this app.
+/FUDERU-PACKAGE-GAP-ANALYSIS.md
+
 # Local environment values; commit a separate .env.example if needed.
 .env
 .env.*

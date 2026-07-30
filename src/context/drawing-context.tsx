@@ -127,6 +127,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
       visible: l.visible,
       opacity: l.opacity,
       blendMode: l.blendMode,
+      alphaLock: l.alphaLock ?? false,
+      locked: l.locked ?? false,
     }));
     
     // We reverse layers so that "Background" layer (first in fuderu) is at the bottom of the list,
@@ -153,6 +155,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         visible: l.visible,
         opacity: l.opacity,
         blendMode: l.blendMode,
+        alphaLock: l.alphaLock ?? false,
+        locked: l.locked ?? false,
         dataUrl: l.canvas ? l.canvas.toDataURL("image/png") : ""
       };
     });
@@ -307,6 +311,26 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const toggleAlphaLock = (id: string) => {
+    if (!fuderuCanvasRef.current) return;
+    const layer = getLayerCompat(fuderuCanvasRef.current, id);
+    if (layer) {
+      const nextVal = !(layer as any).alphaLock;
+      fuderuCanvasRef.current.updateLayer(id, { alphaLock: nextVal });
+      syncLayers();
+    }
+  };
+
+  const toggleLayerLock = (id: string) => {
+    if (!fuderuCanvasRef.current) return;
+    const layer = getLayerCompat(fuderuCanvasRef.current, id);
+    if (layer) {
+      const nextVal = !(layer as any).locked;
+      fuderuCanvasRef.current.updateLayer(id, { locked: nextVal });
+      syncLayers();
+    }
+  };
+
   const setLayerOpacity = (id: string, opacity: number) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.updateLayer(id, { opacity });
@@ -370,9 +394,13 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     
     const targetIds = [...newLayers].reverse().map(l => l.id);
     
-    for (let i = 0; i < targetIds.length; i++) {
-      const id = targetIds[i];
-      canvas.layers.moveLayer(id, i);
+    if (typeof canvas.reorderLayers === "function") {
+      canvas.reorderLayers(targetIds);
+    } else {
+      for (let i = 0; i < targetIds.length; i++) {
+        const id = targetIds[i];
+        canvas.layers.moveLayer(id, i);
+      }
     }
     
     canvas.renderLayers();
@@ -460,6 +488,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         addLayer,
         deleteLayer,
         toggleLayerVisibility,
+        toggleAlphaLock,
+        toggleLayerLock,
         setLayerOpacity,
         setLayerBlendMode,
         renameLayer,

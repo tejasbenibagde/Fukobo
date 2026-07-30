@@ -9,7 +9,10 @@ import {
   Trash2, 
   Eye, 
   EyeOff,
-  GripVertical
+  GripVertical,
+  Lock,
+  Unlock,
+  Shield
 } from "lucide-react";
 
 interface PanelProps {
@@ -25,6 +28,8 @@ export default function LayersPanel({ style, className }: PanelProps = {}) {
     addLayer,
     deleteLayer,
     toggleLayerVisibility,
+    toggleAlphaLock,
+    toggleLayerLock,
     setLayerOpacity,
     setLayerBlendMode,
     renameLayer,
@@ -203,18 +208,30 @@ export default function LayersPanel({ style, className }: PanelProps = {}) {
                 </div>
               </div>
  
-              {/* Right Side: Opacity Readout & Delete */}
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] font-mono text-muted-foreground/80 font-bold">
+              {/* Right Side: Status Indicators, Opacity Readout & Delete */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {layer.alphaLock && (
+                  <span title="Alpha Locked" className="text-amber-500/90 dark:text-amber-400">
+                    <Shield className="h-3 w-3" />
+                  </span>
+                )}
+
+                {layer.locked && (
+                  <span title="Layer Locked" className="text-destructive/80">
+                    <Lock className="h-3 w-3" />
+                  </span>
+                )}
+
+                <span className="text-[10px] font-mono text-muted-foreground/80 font-bold ml-1">
                   {Math.round(layer.opacity * 100)}%
                 </span>
-                {layers.length > 1 && (
+                {layers.length > 1 && !layer.locked && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteLayer(layer.id);
                     }}
-                    className="p-1 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors"
+                    className="p-1 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors ml-0.5"
                     title="Delete Layer"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -226,12 +243,38 @@ export default function LayersPanel({ style, className }: PanelProps = {}) {
         })}
       </div>
 
-      {/* Active Layer Opacity & Blend Mode Adjuster */}
+      {/* Active Layer Opacity, Alpha Lock, Layer Lock & Blend Mode Adjuster */}
       <div className="pt-3 border-t mt-3 space-y-2.5">
         {layers.map((layer) => {
           if (layer.id !== activeLayerId) return null;
           return (
-            <div key={layer.id} className="space-y-2">
+            <div key={layer.id} className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={layer.alphaLock ? "default" : "outline"}
+                  size="sm"
+                  className={`h-7 text-[11px] justify-center gap-1.5 font-medium ${
+                    layer.alphaLock ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
+                  }`}
+                  onClick={() => toggleAlphaLock(layer.id)}
+                  title="Alpha Lock prevents drawing outside existing non-transparent pixels on this layer"
+                >
+                  <Shield className="h-3 w-3" />
+                  {layer.alphaLock ? "Alpha Locked" : "Alpha Lock"}
+                </Button>
+
+                <Button
+                  variant={layer.locked ? "destructive" : "outline"}
+                  size="sm"
+                  className="h-7 text-[11px] justify-center gap-1.5 font-medium"
+                  onClick={() => toggleLayerLock(layer.id)}
+                  title="Lock Layer to prevent edits or accidental deletion"
+                >
+                  {layer.locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                  {layer.locked ? "Locked" : "Lock Layer"}
+                </Button>
+              </div>
+
               <div className="space-y-1">
                 <div className="flex justify-between text-[11px] font-semibold text-muted-foreground">
                   <span>Active Layer Opacity</span>
@@ -241,9 +284,10 @@ export default function LayersPanel({ style, className }: PanelProps = {}) {
                   type="range"
                   min="0"
                   max="100"
+                  disabled={layer.locked}
                   value={layer.opacity * 100}
                   onChange={(e) => setLayerOpacity(layer.id, parseFloat(e.target.value) / 100)}
-                  className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                  className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary disabled:opacity-50"
                 />
               </div>
 
@@ -251,8 +295,9 @@ export default function LayersPanel({ style, className }: PanelProps = {}) {
                 <span className="text-[11px] font-semibold text-muted-foreground">Blend Mode</span>
                 <select
                   value={layer.blendMode || "source-over"}
+                  disabled={layer.locked}
                   onChange={(e) => setLayerBlendMode(layer.id, e.target.value)}
-                  className="w-full bg-background border rounded px-2 py-1 text-xs focus:outline-none"
+                  className="w-full bg-background border rounded px-2 py-1 text-xs focus:outline-none disabled:opacity-50"
                 >
                   {BLEND_MODES.map((mode) => (
                     <option key={mode.id} value={mode.id}>{mode.name}</option>
