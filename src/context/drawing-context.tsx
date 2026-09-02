@@ -2,7 +2,7 @@
 // src/context/drawing-context.tsx
 import { createContext, useContext, useState, useRef, ReactNode } from "react";
 import { Canvas } from "fuderu";
-import { ToolType, Layer, DrawingContextType, Artwork, ArtworkLayer, ReplayAction } from "../types";
+import { ToolType, Layer, DrawingContextType, Artwork, ReplayAction } from "../types";
 
 const DrawingContext = createContext<DrawingContextType | undefined>(undefined);
 
@@ -99,27 +99,11 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   // Replay Stack state
   const [replayStack, setReplayStack] = useState<ReplayAction[]>([]);
 
-  // Helper to compatibly and safely find a layer on the canvas instance
-  const getLayerCompat = (canvasObj: any, id: string) => {
-    if (!canvasObj) return undefined;
-    if (typeof canvasObj.getLayer === "function") {
-      return canvasObj.getLayer(id);
-    }
-    if (canvasObj.layers && typeof canvasObj.layers.getById === "function") {
-      try {
-        return canvasObj.layers.getById(id);
-      } catch {
-        return undefined;
-      }
-    }
-    return undefined;
-  };
-
   // Synchronize layers from fuderu canvas to React state
   const syncLayers = () => {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
-    
+
     const fLayers = canvas.getLayers();
     const mapped: Layer[] = fLayers.map((l: any) => ({
       id: l.id,
@@ -130,37 +114,33 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
       alphaLock: l.alphaLock ?? false,
       locked: l.locked ?? false,
     }));
-    
+
     // We reverse layers so that "Background" layer (first in fuderu) is at the bottom of the list,
     // and new layers (top-most) are at the top of the layer list UI.
     setLayers([...mapped].reverse());
-    setActiveLayerId(canvas.layers.getActiveId() || "");
-    
+    const active = canvas.getActiveLayer?.() || canvas.getLayerById?.(canvas.layers?.getActiveId?.() || "");
+    setActiveLayerId(active?.id || canvas.layers?.getActiveId() || "");
+
     setCanUndo(canvas.history ? canvas.history.canUndo() : false);
     setCanRedo(canvas.history ? canvas.history.canRedo() : false);
   };
 
-  const saveCurrentArtwork = () => {
+  const saveCurrentArtwork = async () => {
     if (!fuderuCanvasRef.current || !currentArtworkId) return;
     const canvasInstance = fuderuCanvasRef.current;
-    
-    const canvasElement = document.querySelector('canvas');
-    const thumbnail = canvasElement ? canvasElement.toDataURL("image/png") : "";
-    
-    const fLayers = canvasInstance.getLayers();
-    const artworkLayers: ArtworkLayer[] = fLayers.map((l: any) => {
-      return {
-        id: l.id,
-        name: l.name,
-        visible: l.visible,
-        opacity: l.opacity,
-        blendMode: l.blendMode,
-        alphaLock: l.alphaLock ?? false,
-        locked: l.locked ?? false,
-        dataUrl: l.canvas ? l.canvas.toDataURL("image/png") : ""
-      };
-    });
-    
+
+    let doc: any = undefined;
+    let thumbnail = "";
+    try {
+      doc = await canvasInstance.exportDocument();
+      thumbnail = await canvasInstance.exportPNG({ includeBackground: true });
+    } catch {
+      const canvasElement = document.querySelector('canvas');
+      thumbnail = canvasElement ? canvasElement.toDataURL("image/png") : "";
+    }
+
+    const actionLog = typeof canvasInstance.getActionLog === "function" ? canvasInstance.getActionLog() : [];
+
     const updatedArtworks = artworks.map((art) => {
       if (art.id === currentArtworkId) {
         return {
@@ -168,17 +148,21 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
           name: canvasName,
           width: canvasWidth,
           height: canvasHeight,
-          thumbnail,
-          layers: artworkLayers,
-          replayStack,
+          thumbnail: thumbnail || art.thumbnail,
+          document: doc,
+          actionLog,
           updatedAt: new Date().toISOString()
         };
       }
       return art;
     });
-    
+
     setArtworks(updatedArtworks);
-    localStorage.setItem("fukobo_artworks", JSON.stringify(updatedArtworks));
+    try {
+      localStorage.setItem("fukobo_artworks", JSON.stringify(updatedArtworks));
+    } catch (e) {
+      console.warn("Storage warning:", e);
+    }
   };
 
   const createNewArtwork = (name: string, width: number, height: number) => {
@@ -201,54 +185,79 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         }
       ]
     };
-    
+
     const updated = [newArt, ...artworks];
     setArtworks(updated);
-    localStorage.setItem("fukobo_artworks", JSON.stringify(updated));
-    
+    try {
+      localStorage.setItem("fukobo_artworks", JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Storage warning:", e);
+    }
+
     setCanvasWidth(width || 800);
     setCanvasHeight(height || 600);
     setCanvasName(name || "Untitled Artwork");
     setCurrentArtworkId(newId);
     setReplayStack([]);
-    
+
     setLayers([
       { id: "layer-1", name: "Background", visible: true, opacity: 1, blendMode: "source-over" }
     ]);
     setActiveLayerId("layer-1");
-    
+
     setIsEditorActive(true);
   };
 
   const loadArtwork = (id: string) => {
     const art = artworks.find(a => a.id === id);
     if (!art) return;
-    
+
     setCanvasWidth(art.width);
     setCanvasHeight(art.height);
     setCanvasName(art.name);
     setCurrentArtworkId(art.id);
-    setReplayStack(art.replayStack || []);
-    
-    setLayers(art.layers.map(l => ({
-      id: l.id,
-      name: l.name,
-      visible: l.visible,
-      opacity: l.opacity,
-      blendMode: l.blendMode
-    })));
-    
-    if (art.layers.length > 0) {
-      setActiveLayerId(art.layers[art.layers.length - 1].id);
+    setReplayStack(art.actionLog || art.replayStack || []);
+
+    if (art.document) {
+      setLayers(art.document.layers.map(l => ({
+        id: l.id,
+        name: l.name,
+        visible: l.visible,
+        opacity: l.opacity,
+        blendMode: l.blendMode,
+        alphaLock: l.alphaLock ?? false,
+        locked: l.locked ?? false
+      })).reverse());
+      if (art.document.activeLayerId) {
+        setActiveLayerId(art.document.activeLayerId);
+      }
+    } else if (art.layers) {
+      setLayers(art.layers.map(l => ({
+        id: l.id,
+        name: l.name,
+        visible: l.visible,
+        opacity: l.opacity,
+        blendMode: l.blendMode,
+        alphaLock: l.alphaLock ?? false,
+        locked: l.locked ?? false
+      })).reverse());
+
+      if (art.layers.length > 0) {
+        setActiveLayerId(art.layers[art.layers.length - 1].id);
+      }
     }
-    
+
     setIsEditorActive(true);
   };
 
   const deleteArtwork = (id: string) => {
     const updated = artworks.filter(a => a.id !== id);
     setArtworks(updated);
-    localStorage.setItem("fukobo_artworks", JSON.stringify(updated));
+    try {
+      localStorage.setItem("fukobo_artworks", JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Storage warning:", e);
+    }
     if (currentArtworkId === id) {
       setCurrentArtworkId(null);
       setIsEditorActive(false);
@@ -257,82 +266,44 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 
   const addLayer = () => {
     if (!fuderuCanvasRef.current) return;
-    const count = layers.length + 1;
-    const layer = fuderuCanvasRef.current.createLayer({ name: `Layer ${count}` });
+    const canvas = fuderuCanvasRef.current;
+    const count = canvas.getLayers().length + 1;
+    canvas.createLayer({ name: `Layer ${count}` });
     syncLayers();
-    
-    if (layer) {
-      const action: ReplayAction = {
-        id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-        type: 'addLayer',
-        timestamp: Date.now(),
-        data: {
-          layerId: layer.id,
-          layerName: layer.name,
-        }
-      };
-      setReplayStack(prev => [...prev, action]);
-    }
   };
 
   const deleteLayer = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.deleteLayer(id);
     syncLayers();
-    
-    const action: ReplayAction = {
-      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-      type: 'deleteLayer',
-      timestamp: Date.now(),
-      data: {
-        layerId: id,
-      }
-    };
-    setReplayStack(prev => [...prev, action]);
   };
 
   const toggleLayerVisibility = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    const layer = getLayerCompat(fuderuCanvasRef.current, id);
+    const canvas = fuderuCanvasRef.current;
+    const layer = canvas.getLayerById(id);
     if (layer) {
-      fuderuCanvasRef.current.updateLayer(id, { visible: !layer.visible });
+      canvas.updateLayer(id, { visible: !layer.visible });
       syncLayers();
-      
-      const action: ReplayAction = {
-        id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-        type: 'setLayerOpacity', // Use a property update category
-        timestamp: Date.now(),
-        data: {
-          layerId: id,
-          visible: !layer.visible,
-        }
-      };
-      setReplayStack(prev => [...prev, action]);
     }
   };
 
   const toggleAlphaLock = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    const layer = getLayerCompat(fuderuCanvasRef.current, id);
+    const canvas = fuderuCanvasRef.current;
+    const layer = canvas.getLayerById(id);
     if (layer) {
-      const nextVal = !(layer as any).alphaLock;
-      fuderuCanvasRef.current.updateLayer(id, { alphaLock: nextVal });
-      if (fuderuCanvasRef.current.getBrush()) {
-        const activeLayer = fuderuCanvasRef.current.getActiveLayer();
-        if (activeLayer && activeLayer.id === id) {
-          fuderuCanvasRef.current.getBrush().isAlphaLocked = nextVal;
-        }
-      }
+      canvas.updateLayer(id, { alphaLock: !layer.alphaLock });
       syncLayers();
     }
   };
 
   const toggleLayerLock = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    const layer = getLayerCompat(fuderuCanvasRef.current, id);
+    const canvas = fuderuCanvasRef.current;
+    const layer = canvas.getLayerById(id);
     if (layer) {
-      const nextVal = !(layer as any).locked;
-      fuderuCanvasRef.current.updateLayer(id, { locked: nextVal });
+      canvas.updateLayer(id, { locked: !layer.locked });
       syncLayers();
     }
   };
@@ -341,60 +312,23 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.updateLayer(id, { opacity });
     syncLayers();
-    
-    const action: ReplayAction = {
-      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-      type: 'setLayerOpacity',
-      timestamp: Date.now(),
-      data: {
-        layerId: id,
-        opacity,
-      }
-    };
-    setReplayStack(prev => [...prev, action]);
   };
 
   const setLayerBlendMode = (id: string, blendMode: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.updateLayer(id, { blendMode: blendMode as any });
     syncLayers();
-    
-    const action: ReplayAction = {
-      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-      type: 'setLayerBlendMode',
-      timestamp: Date.now(),
-      data: {
-        layerId: id,
-        blendMode,
-      }
-    };
-    setReplayStack(prev => [...prev, action]);
   };
 
   const renameLayer = (id: string, name: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.updateLayer(id, { name });
     syncLayers();
-    
-    const action: ReplayAction = {
-      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-      type: 'renameLayer',
-      timestamp: Date.now(),
-      data: {
-        layerId: id,
-        layerName: name,
-      }
-    };
-    setReplayStack(prev => [...prev, action]);
   };
 
   const handleSetActiveLayerId = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.setActiveLayer(id);
-    const activeL = fuderuCanvasRef.current.getActiveLayer();
-    if (activeL && fuderuCanvasRef.current.getBrush()) {
-      fuderuCanvasRef.current.getBrush().isAlphaLocked = !!(activeL as any).alphaLock;
-    }
     setActiveLayerId(id);
     syncLayers();
   };
@@ -402,39 +336,16 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const reorderLayers = (newLayers: Layer[]) => {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
-    
+    // Layer list is rendered in reverse for top-to-bottom visual stacking
     const targetIds = [...newLayers].reverse().map(l => l.id);
-    
-    if (typeof canvas.reorderLayers === "function") {
-      canvas.reorderLayers(targetIds);
-    } else {
-      for (let i = 0; i < targetIds.length; i++) {
-        const id = targetIds[i];
-        canvas.layers.moveLayer(id, i);
-      }
-    }
-    
-    canvas.renderLayers();
+    canvas.reorderLayers(targetIds);
     syncLayers();
-    
-    const action: ReplayAction = {
-      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-      type: 'reorderLayers',
-      timestamp: Date.now(),
-      data: {
-        targetIds,
-      }
-    };
-    setReplayStack(prev => [...prev, action]);
   };
 
   const undo = () => {
     if (!fuderuCanvasRef.current) return;
     fuderuCanvasRef.current.undo();
     syncLayers();
-    
-    // Pop the last action from replayStack to keep it pristine
-    setReplayStack(prev => prev.slice(0, -1));
   };
 
   const redo = () => {
@@ -450,17 +361,9 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     if (bg) {
       bg.ctx.fillStyle = "#ffffff";
       bg.ctx.fillRect(0, 0, bg.canvas.width, bg.canvas.height);
-      (fuderuCanvasRef.current as any).renderLayers();
+      fuderuCanvasRef.current.renderLayers();
     }
     syncLayers();
-    
-    const action: ReplayAction = {
-      id: "action-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-      type: 'clear',
-      timestamp: Date.now(),
-      data: {}
-    };
-    setReplayStack(prev => [...prev, action]);
   };
 
   return (

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/layout/inspector/history-panel.tsx
 
 import { useDrawing } from "@/context/drawing-context";
@@ -13,62 +12,40 @@ export default function HistoryPanel({ style, className }: PanelProps = {}) {
   const { fuderuCanvasRef, undo, redo, canUndo, canRedo, syncLayers } = useDrawing();
 
   const canvas = fuderuCanvasRef.current;
-  const undoStack = (canvas?.history as any)?.undoStack || [];
-  const redoStack = (canvas?.history as any)?.redoStack || [];
-
-  // Reconstruct chronological action list
-  const actions = [...undoStack, ...[...redoStack].reverse()];
-  const activeIndex = undoStack.length; // Active index is equal to the length of applied actions
-
-  const getEntryLabel = (entry: any) => {
-    if (!entry) return "Action";
-    const name = entry.constructor?.name;
-    const hasOwn = (obj: any, prop: string) => obj && Object.prototype.hasOwnProperty.call(obj, prop);
-    if (name === "CanvasStateHistoryEntry" || hasOwn(entry, "beforeData")) {
-      return "Draw Stroke";
-    }
-    if (name === "LayerCreatedHistoryEntry" || (hasOwn(entry, "layer") && !hasOwn(entry, "index"))) {
-      return "Create Layer";
-    }
-    if (name === "LayerDeletedHistoryEntry" || (hasOwn(entry, "layer") && hasOwn(entry, "index"))) {
-      return "Delete Layer";
-    }
-    if (name === "LayerPropertyHistoryEntry" || hasOwn(entry, "propertyName")) {
-      const prop = entry.propertyName || "Property";
-      return `Change ${prop.charAt(0).toUpperCase() + prop.slice(1)}`;
-    }
-    if (name === "MoveLayerHistoryEntry" || hasOwn(entry, "beforeIndex")) {
-      return "Reorder Layer";
-    }
-    return "Edit Canvas";
+  const entries = canvas?.history?.getEntries() || [];
+  const historyState = canvas?.history?.getHistoryState?.() || {
+    canUndo: false,
+    canRedo: false,
+    index: 0,
+    length: 0,
   };
+  const activeIndex = historyState.index;
 
   const historySteps = [
     { id: 0, label: "Initial Base Canvas" },
-    ...actions.map((act, idx) => ({
+    ...entries.map((entry, idx) => ({
       id: idx + 1,
-      label: `${idx + 1}. ${getEntryLabel(act)}`,
+      label: `${idx + 1}. ${entry.description || entry.type || "Edit"}`,
     })),
   ];
 
-  const handleStepClick = (targetId: number) => {
-    if (!canvas) return;
-    const currentIndex = undoStack.length;
-    const diff = currentIndex - targetId;
-    if (diff > 0) {
-      for (let i = 0; i < diff; i++) {
-        canvas.undo();
-      }
-    } else if (diff < 0) {
-      for (let i = 0; i < -diff; i++) {
-        canvas.redo();
+  const handleStepClick = (targetIndex: number) => {
+    if (!canvas?.history) return;
+    if (typeof canvas.history.goTo === "function") {
+      canvas.history.goTo(targetIndex);
+    } else {
+      const diff = activeIndex - targetIndex;
+      if (diff > 0) {
+        for (let i = 0; i < diff; i++) canvas.undo();
+      } else if (diff < 0) {
+        for (let i = 0; i < -diff; i++) canvas.redo();
       }
     }
     syncLayers();
   };
 
   return (
-    <section 
+    <section
       style={style}
       className={`flex flex-col p-4 bg-background ${className || "h-full min-h-0"}`}
     >
@@ -90,13 +67,12 @@ export default function HistoryPanel({ style, className }: PanelProps = {}) {
             <div
               key={step.id}
               onClick={() => handleStepClick(step.id)}
-              className={`flex items-center gap-2.5 p-1.5 rounded-md cursor-pointer transition-all duration-150 ${
-                isActive
+              className={`flex items-center gap-2.5 p-1.5 rounded-md cursor-pointer transition-all duration-150 ${isActive
                   ? "bg-primary/10 text-primary font-semibold border-l-2 border-primary pl-2"
                   : isUndone
-                  ? "text-muted-foreground/40 line-through decoration-muted-foreground/20 hover:bg-accent/30"
-                  : "hover:bg-accent text-foreground/80"
-              }`}
+                    ? "text-muted-foreground/40 line-through decoration-muted-foreground/20 hover:bg-accent/30"
+                    : "hover:bg-accent text-foreground/80"
+                }`}
             >
               <CheckCircle2 className={`h-3 w-3 ${isActive ? "text-primary shrink-0" : isUndone ? "text-muted-foreground/20 shrink-0" : "text-muted-foreground/60 shrink-0"}`} />
               <span className="text-xs truncate font-medium">
@@ -111,14 +87,14 @@ export default function HistoryPanel({ style, className }: PanelProps = {}) {
       <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t mt-2">
         <span>Click to restore state</span>
         <div className="flex gap-1.5">
-          <button 
+          <button
             onClick={undo}
             disabled={!canUndo}
             className="hover:text-foreground disabled:opacity-30 transition-colors"
           >
             <Undo className="h-3 w-3" />
           </button>
-          <button 
+          <button
             onClick={redo}
             disabled={!canRedo}
             className="hover:text-foreground disabled:opacity-30 transition-colors"

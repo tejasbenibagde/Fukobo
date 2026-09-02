@@ -26,7 +26,8 @@ export default function Toolbar() {
     activeTool,
     setIsEditorActive,
     saveCurrentArtwork,
-    canvasName
+    canvasName,
+    fuderuCanvasRef
   } = useDrawing();
 
   const getToolDisplayName = (tool: string) => {
@@ -41,6 +42,39 @@ export default function Toolbar() {
       setTimeout(() => {
         statusEl.innerText = "Ready";
       }, 2500);
+    }
+  };
+
+  const handleExportPNG = async () => {
+    const fCanvas = fuderuCanvasRef.current;
+    let url = "";
+    if (fCanvas && typeof fCanvas.exportPNG === "function") {
+      try {
+        url = await fCanvas.exportPNG({ includeBackground: true });
+      } catch {
+        const canvas = document.querySelector('canvas');
+        if (canvas) url = canvas.toDataURL("image/png");
+      }
+    } else {
+      const canvas = document.querySelector('canvas');
+      if (canvas) url = canvas.toDataURL("image/png");
+    }
+
+    if (url) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${canvasName || "artwork"}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      const statusEl = document.querySelector('footer');
+      if (statusEl) {
+        statusEl.innerText = "Artwork successfully exported as PNG!";
+        setTimeout(() => {
+          statusEl.innerText = "Ready";
+        }, 2000);
+      }
     }
   };
 
@@ -138,26 +172,7 @@ export default function Toolbar() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-foreground hover:bg-primary/15 hover:text-primary"
-                onClick={() => {
-                  const canvas = document.querySelector('canvas');
-                  if (canvas) {
-                    const url = canvas.toDataURL("image/png");
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${canvasName || "artwork"}.png`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    
-                    const statusEl = document.querySelector('footer');
-                    if (statusEl) {
-                      statusEl.innerText = "Artwork successfully exported as PNG!";
-                      setTimeout(() => {
-                        statusEl.innerText = "Ready";
-                      }, 2000);
-                    }
-                  }
-                }}
+                onClick={handleExportPNG}
               />
             }>
               <Download className="h-4 w-4" />

@@ -1,7 +1,7 @@
 // src/types.ts
 
 import { MutableRefObject } from "react";
-import { Canvas } from "fuderu";
+import { Canvas, FuderuDocument, CanvasAction } from "fuderu";
 
 export type ToolType = 'brush' | 'pencil' | 'eraser' | 'bucket' | 'picker' | 'rectangle' | 'circle' | 'text';
 
@@ -26,36 +26,12 @@ export interface ArtworkLayer {
   dataUrl: string; // Base64 png data of the layer
 }
 
-export interface ReplayAction {
-  id: string;
-  type: 'stroke' | 'clear' | 'addLayer' | 'deleteLayer' | 'renameLayer' | 'setLayerOpacity' | 'setLayerBlendMode' | 'reorderLayers' | 'bucket' | 'shape' | 'text';
-  timestamp: number;
-  data: {
-    points?: { x: number; y: number; pressure: number }[];
-    tool?: string;
-    size?: number;
-    opacity?: number;
-    color?: string;
-    layerId?: string;
-    layerName?: string;
-    blendMode?: string;
-    index?: number;
-    targetIds?: string[];
-    shapeType?: string;
-    startPoint?: { x: number; y: number };
-    endPoint?: { x: number; y: number };
-    strokeType?: string;
-    fillShape?: boolean;
-    text?: string;
-    fontFamily?: string;
-    isBold?: boolean;
-    isItalic?: boolean;
-    textAlign?: string;
-    visible?: boolean;
-    x?: number;
-    y?: number;
-  };
-}
+export type ReplayAction = CanvasAction | {
+  id?: string;
+  type: string;
+  timestamp?: number;
+  data?: Record<string, unknown>;
+};
 
 export interface Artwork {
   id: string;
@@ -64,7 +40,9 @@ export interface Artwork {
   height: number;
   updatedAt: string;
   thumbnail: string; // Base64 png thumbnail
-  layers: ArtworkLayer[];
+  document?: FuderuDocument; // Native Fuderu Document state
+  layers?: ArtworkLayer[]; // Legacy layers fallback
+  actionLog?: CanvasAction[]; // Native Fuderu CanvasAction log
   replayStack?: ReplayAction[];
 }
 
@@ -79,7 +57,7 @@ export interface DrawingContextType {
   setPrimaryColor: (color: string) => void;
   secondaryColor: string;
   setSecondaryColor: (color: string) => void;
-  
+
   // Dashboard & Artworks management
   isEditorActive: boolean;
   setIsEditorActive: (active: boolean) => void;
@@ -100,7 +78,7 @@ export interface DrawingContextType {
   // fuderu canvas reference
   fuderuCanvasRef: MutableRefObject<Canvas | null>;
   syncLayers: () => void;
-  
+
   // Layers State
   layers: Layer[];
   activeLayerId: string;
@@ -115,13 +93,13 @@ export interface DrawingContextType {
   renameLayer: (id: string, name: string) => void;
   reorderLayers: (layers: Layer[]) => void;
   clearCanvas: () => void;
-  
+
   // History State
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  
+
   // Panels
   leftPanelOpen: boolean;
   setLeftPanelOpen: (open: boolean) => void;
