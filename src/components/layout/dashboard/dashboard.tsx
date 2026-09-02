@@ -1,6 +1,6 @@
 // src/components/layout/dashboard/dashboard.tsx
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useDrawing } from "@/context/drawing-context";
 import { Button } from "@/components/ui/button";
 import { 
@@ -10,8 +10,13 @@ import {
   Clock,
   Layout,
   Maximize2,
-  Trash
+  Trash,
+  Play,
+  X,
+  RotateCcw
 } from "lucide-react";
+import { Canvas } from "fuderu";
+import { Artwork } from "@/types";
 
 export default function Dashboard() {
   const { 
@@ -27,6 +32,15 @@ export default function Dashboard() {
   const [width, setWidth] = useState(800);
   const [height, setHeight] = useState(600);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Timelapse Replay Modal States
+  const [timelapseArt, setTimelapseArt] = useState<Artwork | null>(null);
+  const [replayProgress, setReplayProgress] = useState(0);
+  const [replaySpeed, setReplaySpeed] = useState(2);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const timelapseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fuderuInstanceRef = useRef<Canvas | null>(null);
+  const isReplayingRef = useRef(false);
 
   const dimensionPresets = [
     { label: "Standard (800 × 600)", w: 800, h: 600, desc: "Classic SD proportion" },
@@ -52,9 +66,100 @@ export default function Dashboard() {
         hour: "2-digit",
         minute: "2-digit",
       });
-    } catch (e) {
+    } catch {
       return "Recently";
     }
+  };
+
+  const startTimelapseReplay = async (speed = replaySpeed) => {
+    if (!timelapseArt || !timelapseCanvasRef.current) return;
+    const canvasEl = timelapseCanvasRef.current;
+
+    if (!fuderuInstanceRef.current) {
+      fuderuInstanceRef.current = new Canvas({
+        canvas: canvasEl,
+        document: { width: timelapseArt.width, height: timelapseArt.height }
+      });
+    }
+    const canvas = fuderuInstanceRef.current;
+
+    isReplayingRef.current = true;
+    setIsPlaying(true);
+    setReplayProgress(0);
+
+    await canvas.clear();
+    const bg = canvas.getLayers()[0];
+    if (bg) {
+      bg.ctx.fillStyle = "#ffffff";
+      bg.ctx.fillRect(0, 0, bg.canvas.width, bg.canvas.height);
+      canvas.renderLayers();
+    }
+
+    const actions = timelapseArt.actionLog && timelapseArt.actionLog.length > 0
+      ? timelapseArt.actionLog
+      : [];
+
+    if (actions.length > 0) {
+      try {
+        await canvas.replay(actions, {
+          speed,
+          animateStrokes: true,
+          onProgress: (p) => {
+            if (isReplayingRef.current) {
+              setReplayProgress(Math.round(p * 100));
+            }
+          }
+        });
+      } catch (err) {
+        console.error("Timelapse error", err);
+      } finally {
+        if (isReplayingRef.current) {
+          setIsPlaying(false);
+          isReplayingRef.current = false;
+        }
+      }
+    } else {
+      // If no recorded action stream yet, display current thumbnail preview
+      if (timelapseArt.thumbnail) {
+        const img = new Image();
+        img.onload = () => {
+          if (bg) {
+            bg.ctx.drawImage(img, 0, 0);
+            canvas.renderLayers();
+          }
+        };
+        img.src = timelapseArt.thumbnail;
+      }
+      setIsPlaying(false);
+      isReplayingRef.current = false;
+      setReplayProgress(100);
+    }
+  };
+
+  useEffect(() => {
+    if (timelapseArt && timelapseCanvasRef.current) {
+      startTimelapseReplay(replaySpeed);
+    }
+
+    return () => {
+      isReplayingRef.current = false;
+      if (fuderuInstanceRef.current) {
+        fuderuInstanceRef.current.destroy();
+        fuderuInstanceRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelapseArt]);
+
+  const handleCloseTimelapse = () => {
+    isReplayingRef.current = false;
+    if (fuderuInstanceRef.current) {
+      fuderuInstanceRef.current.destroy();
+      fuderuInstanceRef.current = null;
+    }
+    setTimelapseArt(null);
+    setIsPlaying(false);
+    setReplayProgress(0);
   };
 
   return (
@@ -272,6 +377,21 @@ export default function Dashboard() {
                         </div>
                       )}
 
+                      {/* Hover Overlay Play Icon */}
+                      <div className="absolute inset-0 bg-stone-900/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTimelapseArt(art);
+                          }}
+                          className="p-3 bg-white/95 text-primary rounded-full shadow-lg transform transition-transform hover:scale-110 active:scale-95"
+                          title="Play Timelapse Replay"
+                        >
+                          <Play className="h-5 w-5 fill-current ml-0.5" />
+                        </button>
+                      </div>
+
                       {/* Dimensions Overlay Tag */}
                       <div className="absolute bottom-2.5 right-2.5 bg-stone-950/80 backdrop-blur-xs text-white font-mono text-[9px] font-bold px-2 py-0.5 rounded-md tracking-wide">
                         {art.width} × {art.height}px
@@ -295,7 +415,7 @@ export default function Dashboard() {
                           </span>
                           <span>|</span>
                           <span className="font-mono text-stone-500 font-bold">
-                            {art.layers ? art.layers.length : 1} Layer{art.layers?.length !== 1 ? 's' : ''}
+                            {art.document?.layers ? art.document.layers.length : (art.layers ? art.layers.length : 1)} Layer{(art.document?.layers?.length ?? art.layers?.length) !== 1 ? 's' : ''}
                           </span>
                         </div>
                       </div>
@@ -331,14 +451,30 @@ export default function Dashboard() {
                           </div>
                         ) : (
                           <>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => loadArtwork(art.id)}
-                              className="h-8 text-xs font-semibold border-stone-200 hover:bg-stone-50 px-3 shrink-0"
-                            >
-                              Open Painting
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTimelapseArt(art);
+                                }}
+                                className="h-8 text-xs font-semibold gap-1.5 border-primary/25 text-primary hover:bg-primary/5 hover:text-primary px-2.5 shrink-0"
+                                title="Play drawing timelapse"
+                              >
+                                <Play className="h-3 w-3 fill-current text-primary" />
+                                <span>Timelapse</span>
+                              </Button>
+
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => loadArtwork(art.id)}
+                                className="h-8 text-xs font-semibold border-stone-200 hover:bg-stone-50 px-3 shrink-0"
+                              >
+                                Open
+                              </Button>
+                            </div>
 
                             <button
                               onClick={(e) => {
@@ -361,6 +497,128 @@ export default function Dashboard() {
           )}
         </section>
       </div>
+
+      {/* Timelapse Replay Modal */}
+      {timelapseArt && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-stone-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/50">
+              <div className="flex items-center gap-2.5">
+                <span className="p-1.5 bg-primary/10 text-primary rounded-md">
+                  <Play className="h-4 w-4 fill-current" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-stone-900 leading-tight">
+                    {timelapseArt.name} — Timelapse Replay
+                  </h3>
+                  <p className="text-[11px] text-stone-500 font-mono">
+                    {timelapseArt.width} × {timelapseArt.height}px
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-stone-400 hover:text-stone-800"
+                onClick={handleCloseTimelapse}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Stage Canvas Viewport */}
+            <div className="p-6 bg-stone-100 flex-1 overflow-auto flex items-center justify-center min-h-[320px]">
+              <div 
+                className="bg-white rounded-lg shadow-md border border-stone-200 overflow-hidden relative"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "50vh",
+                  aspectRatio: `${timelapseArt.width} / ${timelapseArt.height}`,
+                }}
+              >
+                <canvas
+                  ref={timelapseCanvasRef}
+                  width={timelapseArt.width}
+                  height={timelapseArt.height}
+                  className="w-full h-full object-contain block bg-white"
+                />
+              </div>
+            </div>
+
+            {/* Controls Bar */}
+            <div className="px-5 py-4 border-t border-stone-200 bg-white flex flex-col gap-3">
+              {/* Progress bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] font-semibold text-stone-500">
+                  <span>{isPlaying ? "Replaying Stroke Actions..." : "Playback Complete"}</span>
+                  <span className="font-mono">{replayProgress}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary transition-all duration-150" 
+                    style={{ width: `${replayProgress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons & Speed */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider mr-1">
+                    Speed:
+                  </span>
+                  {[1, 2, 4, 8].map((spd) => (
+                    <Button
+                      key={spd}
+                      variant="outline"
+                      size="sm"
+                      className={`h-7 px-2.5 text-xs font-semibold ${
+                        replaySpeed === spd 
+                          ? "bg-primary/10 border-primary/30 text-primary" 
+                          : "border-stone-200 text-stone-600 hover:bg-stone-50"
+                      }`}
+                      onClick={() => {
+                        setReplaySpeed(spd);
+                        if (isPlaying) {
+                          startTimelapseReplay(spd);
+                        }
+                      }}
+                    >
+                      {spd}x
+                    </Button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3 text-xs font-semibold gap-1.5 border-stone-200 hover:bg-stone-50"
+                    onClick={() => startTimelapseReplay(replaySpeed)}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Restart</span>
+                  </Button>
+
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-8 px-3 text-xs font-semibold gap-1.5 shadow-sm"
+                    onClick={() => {
+                      handleCloseTimelapse();
+                      loadArtwork(timelapseArt.id);
+                    }}
+                  >
+                    <span>Open in Canvas</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Humble Footer */}
       <footer className="border-t border-stone-200/60 bg-stone-100/30 py-6 text-center text-xs text-stone-400 select-none">

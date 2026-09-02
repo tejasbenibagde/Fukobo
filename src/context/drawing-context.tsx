@@ -14,9 +14,27 @@ const initialArtworks: Artwork[] = [
     height: 600,
     updatedAt: new Date().toISOString(),
     thumbnail: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'><rect width='100%' height='100%' fill='%23fafaf9'/><circle cx='400' cy='300' r='120' fill='%23f97316' opacity='0.45'/><path d='M100 520 Q 400 350, 700 520' stroke='%233b82f6' stroke-width='16' fill='none' stroke-linecap='round'/></svg>",
+    document: {
+      version: 1,
+      width: 800,
+      height: 600,
+      layers: [
+        {
+          id: "layer-sun-bg",
+          name: "Background",
+          visible: true,
+          opacity: 1,
+          blendMode: "source-over",
+          alphaLock: false,
+          locked: false,
+          dataUrl: ""
+        }
+      ],
+      activeLayerId: "layer-sun-bg"
+    },
     layers: [
       {
-        id: "layer-1",
+        id: "layer-sun-bg",
         name: "Background",
         visible: true,
         opacity: 1,
@@ -32,9 +50,27 @@ const initialArtworks: Artwork[] = [
     height: 600,
     updatedAt: new Date(Date.now() - 3600000 * 3).toISOString(),
     thumbnail: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'><rect width='100%' height='100%' fill='%23f5f5f4'/><path d='M100 400 C 250 300, 350 500, 700 400' stroke='%2306b6d4' stroke-width='14' fill='none' stroke-linecap='round'/><path d='M100 460 C 250 360, 350 560, 700 460' stroke='%2306b6d4' stroke-width='8' fill='none' stroke-linecap='round' opacity='0.5'/></svg>",
+    document: {
+      version: 1,
+      width: 800,
+      height: 600,
+      layers: [
+        {
+          id: "layer-waves-bg",
+          name: "Background",
+          visible: true,
+          opacity: 1,
+          blendMode: "source-over",
+          alphaLock: false,
+          locked: false,
+          dataUrl: ""
+        }
+      ],
+      activeLayerId: "layer-waves-bg"
+    },
     layers: [
       {
-        id: "layer-1",
+        id: "layer-waves-bg",
         name: "Background",
         visible: true,
         opacity: 1,
@@ -103,7 +139,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const syncLayers = () => {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
-
+    
     const fLayers = canvas.getLayers();
     const mapped: Layer[] = fLayers.map((l: any) => ({
       id: l.id,
@@ -114,13 +150,13 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
       alphaLock: l.alphaLock ?? false,
       locked: l.locked ?? false,
     }));
-
+    
     // We reverse layers so that "Background" layer (first in fuderu) is at the bottom of the list,
     // and new layers (top-most) are at the top of the layer list UI.
     setLayers([...mapped].reverse());
     const active = canvas.getActiveLayer?.() || canvas.getLayerById?.(canvas.layers?.getActiveId?.() || "");
     setActiveLayerId(active?.id || canvas.layers?.getActiveId() || "");
-
+    
     setCanUndo(canvas.history ? canvas.history.canUndo() : false);
     setCanRedo(canvas.history ? canvas.history.canRedo() : false);
   };
@@ -128,7 +164,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
   const saveCurrentArtwork = async () => {
     if (!fuderuCanvasRef.current || !currentArtworkId) return;
     const canvasInstance = fuderuCanvasRef.current;
-
+    
     let doc: any = undefined;
     let thumbnail = "";
     try {
@@ -138,9 +174,9 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
       const canvasElement = document.querySelector('canvas');
       thumbnail = canvasElement ? canvasElement.toDataURL("image/png") : "";
     }
-
+    
     const actionLog = typeof canvasInstance.getActionLog === "function" ? canvasInstance.getActionLog() : [];
-
+    
     const updatedArtworks = artworks.map((art) => {
       if (art.id === currentArtworkId) {
         return {
@@ -156,7 +192,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
       }
       return art;
     });
-
+    
     setArtworks(updatedArtworks);
     try {
       localStorage.setItem("fukobo_artworks", JSON.stringify(updatedArtworks));
@@ -167,16 +203,37 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 
   const createNewArtwork = (name: string, width: number, height: number) => {
     const newId = "art-" + Date.now();
+    const w = width || 800;
+    const h = height || 600;
+    const initialLayerId = "layer-bg-" + Date.now();
     const newArt: Artwork = {
       id: newId,
       name: name || "Untitled Artwork",
-      width: width || 800,
-      height: height || 600,
+      width: w,
+      height: h,
       updatedAt: new Date().toISOString(),
       thumbnail: "",
+      document: {
+        version: 1,
+        width: w,
+        height: h,
+        layers: [
+          {
+            id: initialLayerId,
+            name: "Background",
+            visible: true,
+            opacity: 1,
+            blendMode: "source-over",
+            alphaLock: false,
+            locked: false,
+            dataUrl: "",
+          }
+        ],
+        activeLayerId: initialLayerId,
+      },
       layers: [
         {
-          id: "layer-1",
+          id: initialLayerId,
           name: "Background",
           visible: true,
           opacity: 1,
@@ -185,7 +242,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         }
       ]
     };
-
+    
     const updated = [newArt, ...artworks];
     setArtworks(updated);
     try {
@@ -193,31 +250,31 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn("Storage warning:", e);
     }
-
-    setCanvasWidth(width || 800);
-    setCanvasHeight(height || 600);
+    
+    setCanvasWidth(w);
+    setCanvasHeight(h);
     setCanvasName(name || "Untitled Artwork");
     setCurrentArtworkId(newId);
     setReplayStack([]);
-
+    
     setLayers([
-      { id: "layer-1", name: "Background", visible: true, opacity: 1, blendMode: "source-over" }
+      { id: initialLayerId, name: "Background", visible: true, opacity: 1, blendMode: "source-over" }
     ]);
-    setActiveLayerId("layer-1");
-
+    setActiveLayerId(initialLayerId);
+    
     setIsEditorActive(true);
   };
 
   const loadArtwork = (id: string) => {
     const art = artworks.find(a => a.id === id);
     if (!art) return;
-
+    
     setCanvasWidth(art.width);
     setCanvasHeight(art.height);
     setCanvasName(art.name);
     setCurrentArtworkId(art.id);
     setReplayStack(art.actionLog || art.replayStack || []);
-
+    
     if (art.document) {
       setLayers(art.document.layers.map(l => ({
         id: l.id,
@@ -241,12 +298,12 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
         alphaLock: l.alphaLock ?? false,
         locked: l.locked ?? false
       })).reverse());
-
+      
       if (art.layers.length > 0) {
         setActiveLayerId(art.layers[art.layers.length - 1].id);
       }
     }
-
+    
     setIsEditorActive(true);
   };
 
@@ -274,72 +331,121 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 
   const deleteLayer = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    fuderuCanvasRef.current.deleteLayer(id);
-    syncLayers();
+    try {
+      if (fuderuCanvasRef.current.getLayers().length > 1) {
+        fuderuCanvasRef.current.deleteLayer(id);
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn("deleteLayer warning:", e);
+    }
   };
 
   const toggleLayerVisibility = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
-    const layer = canvas.getLayerById(id);
-    if (layer) {
-      canvas.updateLayer(id, { visible: !layer.visible });
-      syncLayers();
+    try {
+      const layer = canvas.getLayers().find(l => l.id === id);
+      if (layer) {
+        canvas.updateLayer(id, { visible: !layer.visible });
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn(e);
     }
   };
 
   const toggleAlphaLock = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
-    const layer = canvas.getLayerById(id);
-    if (layer) {
-      canvas.updateLayer(id, { alphaLock: !layer.alphaLock });
-      syncLayers();
+    try {
+      const layer = canvas.getLayers().find(l => l.id === id);
+      if (layer) {
+        canvas.updateLayer(id, { alphaLock: !layer.alphaLock });
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn(e);
     }
   };
 
   const toggleLayerLock = (id: string) => {
     if (!fuderuCanvasRef.current) return;
     const canvas = fuderuCanvasRef.current;
-    const layer = canvas.getLayerById(id);
-    if (layer) {
-      canvas.updateLayer(id, { locked: !layer.locked });
-      syncLayers();
+    try {
+      const layer = canvas.getLayers().find(l => l.id === id);
+      if (layer) {
+        canvas.updateLayer(id, { locked: !layer.locked });
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn(e);
     }
   };
 
   const setLayerOpacity = (id: string, opacity: number) => {
     if (!fuderuCanvasRef.current) return;
-    fuderuCanvasRef.current.updateLayer(id, { opacity });
-    syncLayers();
+    try {
+      const exists = fuderuCanvasRef.current.getLayers().some(l => l.id === id);
+      if (exists) {
+        fuderuCanvasRef.current.updateLayer(id, { opacity });
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
   const setLayerBlendMode = (id: string, blendMode: string) => {
     if (!fuderuCanvasRef.current) return;
-    fuderuCanvasRef.current.updateLayer(id, { blendMode: blendMode as any });
-    syncLayers();
+    try {
+      const exists = fuderuCanvasRef.current.getLayers().some(l => l.id === id);
+      if (exists) {
+        fuderuCanvasRef.current.updateLayer(id, { blendMode: blendMode as any });
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
   const renameLayer = (id: string, name: string) => {
     if (!fuderuCanvasRef.current) return;
-    fuderuCanvasRef.current.updateLayer(id, { name });
-    syncLayers();
+    try {
+      const exists = fuderuCanvasRef.current.getLayers().some(l => l.id === id);
+      if (exists) {
+        fuderuCanvasRef.current.updateLayer(id, { name });
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
   const handleSetActiveLayerId = (id: string) => {
     if (!fuderuCanvasRef.current) return;
-    fuderuCanvasRef.current.setActiveLayer(id);
-    setActiveLayerId(id);
-    syncLayers();
+    try {
+      const exists = fuderuCanvasRef.current.getLayers().some(l => l.id === id);
+      if (exists) {
+        fuderuCanvasRef.current.setActiveLayer(id);
+        setActiveLayerId(id);
+        syncLayers();
+      }
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
   const reorderLayers = (newLayers: Layer[]) => {
     if (!fuderuCanvasRef.current) return;
-    const canvas = fuderuCanvasRef.current;
-    // Layer list is rendered in reverse for top-to-bottom visual stacking
-    const targetIds = [...newLayers].reverse().map(l => l.id);
-    canvas.reorderLayers(targetIds);
-    syncLayers();
+    try {
+      const canvas = fuderuCanvasRef.current;
+      const targetIds = [...newLayers].reverse().map(l => l.id);
+      canvas.reorderLayers(targetIds);
+      syncLayers();
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
   const undo = () => {
